@@ -159,7 +159,30 @@ jobs:
           docker build --target control --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t qualityproof-control:test .
           docker build --target browser-job --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t qualityproof-job:test .
           docker run --rm qualityproof-job:test python -m scripts.image_smoke --launch-browser
-      - name: Scan image
+      - name: Scan image and publish the findings
+        # Reported before it is enforced. A scan that only fails is a scan nobody
+        # can act on: the log is not readable without repository access, so the
+        # findings are written to the run summary and uploaded as an artifact
+        # first, and the gate runs afterwards against the same image.
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        with:
+          image-ref: qualityproof-control:test
+          format: table
+          output: trivy-control.txt
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Publish scan findings to the run summary
+        if: always()
+        run: |
+          {
+            echo "## Image scan: qualityproof-control"
+            echo
+            echo '```'
+            cat trivy-control.txt || echo "(no report produced)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Enforce the image scan gate
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
         with:
           image-ref: qualityproof-control:test
@@ -168,6 +191,32 @@ jobs:
           ignore-unfixed: true
           severity: CRITICAL,HIGH
       - name: Scan browser-job image
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        with:
+          image-ref: qualityproof-job:test
+          format: table
+          output: trivy-job.txt
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Publish browser-job scan findings
+        if: always()
+        run: |
+          {
+            echo "## Image scan: qualityproof-job"
+            echo
+            echo '```'
+            cat trivy-job.txt || echo "(no report produced)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: qualityproof-image-scans-${{ github.sha }}
+          path: trivy-*.txt
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Enforce the browser-job scan gate
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
         with:
           image-ref: qualityproof-job:test
