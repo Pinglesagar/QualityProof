@@ -32,6 +32,21 @@ COPY examples ./examples
 COPY tests ./tests
 RUN uv sync --frozen --no-dev && chown -R pwuser:pwuser /app
 
+# Two HIGH findings came from outside the application's own dependency tree:
+# setuptools (CVE-2025-47273, path traversal) and msgpack
+# (GHSA-6v7p-g79w-8964, out-of-bounds read) ship in the base image's Python and
+# in the seed-wheel and download caches left behind by the build. Both are fixed
+# upstream, so both are upgraded.
+#
+# The caches are then removed. They are build inputs, not runtime files: shipping
+# them enlarges the image and, more to the point, means a vulnerable wheel sitting
+# in a cache is part of the artifact we publish even though nothing imports it.
+RUN python -m pip install --no-cache-dir --upgrade \
+        "setuptools>=78.1.1" \
+        "msgpack>=1.2.1" \
+    && rm -rf /root/.cache/uv /root/.cache/virtualenv /root/.cache/pip \
+        /tmp/* /var/tmp/*
+
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]

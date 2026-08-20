@@ -43,3 +43,36 @@ finding it reports is one a patch can resolve. When the scan fails, the fix is t
 patch or to move the pin forward — never to widen the severity filter. A clean
 scan we did not earn is worse than a red build, because it is a false statement
 about the artifact we ship.
+
+## What the image scan actually found
+
+Recorded because the diagnosis took four attempts and the lesson is in the
+sequence, not the fix.
+
+The first three failures were not vulnerabilities at all. The scanner's setup
+action resolves its release tag through the GitHub API; that lookup failed, and
+because the job log needs repository access to read, the failure was
+indistinguishable from a finding. A patch layer was committed against an inferred
+cause, then a token was supplied two different ways, before the installer was
+replaced with a checksum-verified asset download. The pinned version in that
+replacement was also wrong — taken from a log line rather than checked against the
+release list.
+
+Once the scan ran, it reported two HIGH findings, both with upstream fixes:
+
+| Package | Advisory | Installed | Fixed in |
+|---|---|---|---|
+| `setuptools` | CVE-2025-47273 (path traversal) | 70.3.0 | 78.1.1 |
+| `msgpack` | GHSA-6v7p-g79w-8964 (out-of-bounds read) | 1.1.2 | 1.2.1 |
+
+Neither appears in `uv.lock`, and `pip-audit` over the exported requirements is
+clean — they were never application dependencies. They came from the base image's
+system Python and from the seed-wheel and download caches the build leaves behind,
+which the scanner reads because they are part of the published artifact.
+
+Both are upgraded, and the caches are deleted. Deleting them is the more
+interesting half: a vulnerable wheel sitting in `/root/.cache` is shipped whether
+or not anything imports it, and no amount of care over `uv.lock` covers that.
+
+The rule this leaves: **scan the artifact, not the dependency manifest.** They are
+not the same set, and only one of them is what users run.
