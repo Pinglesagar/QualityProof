@@ -263,6 +263,11 @@ class RoleSpec:
     username_env: str = "QUALITYPROOF_USERNAME"
     password_env: str = "QUALITYPROOF_PASSWORD"
     storage_state: Path | None = None
+    #: An unauthenticated identity. Anonymous is a first-class role for access
+    #: control work: "what can someone with no session reach" is the question a
+    #: privilege boundary is defined against, so it must be crawlable in the same
+    #: pass as the authenticated roles rather than in a separate run.
+    anonymous: bool = False
 
     def __post_init__(self) -> None:
         if not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", self.name):
@@ -270,14 +275,20 @@ class RoleSpec:
 
     @classmethod
     def parse(cls, value: str) -> RoleSpec:
-        """Parse ``name=state.json`` or ``name:USER_ENV:PASSWORD_ENV``."""
+        """Parse ``name``, ``name=state.json`` or ``name:USER_ENV:PASSWORD_ENV``.
+
+        A bare name is an anonymous identity: no login is attempted for it.
+        """
         if "=" in value:
             name, _, state = value.partition("=")
             return cls(name=name.strip(), storage_state=Path(state.strip()))
+        if ":" not in value:
+            return cls(name=value.strip(), anonymous=True)
         parts = [part.strip() for part in value.split(":")]
         if len(parts) != 3 or not all(parts):
             raise ValueError(
-                "role must be 'name=storage-state.json' or 'name:USERNAME_ENV:PASSWORD_ENV'"
+                "role must be 'name' for anonymous, 'name=storage-state.json', "
+                "or 'name:USERNAME_ENV:PASSWORD_ENV'"
             )
         return cls(name=parts[0], username_env=parts[1], password_env=parts[2])
 
@@ -295,6 +306,13 @@ class DiscoveryOptions:
     #: How long to wait for a client-side route to render content. Single-page
     #: applications complete their document load before the view exists.
     render_timeout_ms: float = 5_000.0
+    #: Routes to probe in addition to those discovered by following links. A
+    #: link-following crawl cannot find what is never linked, and an
+    #: administrative surface is routinely unlinked for the roles that must not
+    #: reach it — which is exactly the route an access-control requirement is
+    #: about. Seeds are subject to every other policy: same origin, allow-list,
+    #: deny rules and destructive-route refusal all still apply.
+    seed_routes: tuple[str, ...] = ()
     role_name: str = "default"
     storage_state: Path | None = None
     #: Where to persist the authenticated session so the generated suite can
@@ -622,14 +640,31 @@ async def discover_application(
         raise ValueError("login URL is outside the same-origin allowed-domain policy")
     artifacts = project / ".qualityproof" / "discovery"
     artifacts.mkdir(parents=True, exist_ok=True)
+    seeded_unknowns: dict[str, UnknownItem] = {}
     for stale in (*artifacts.glob("page-*.png"), artifacts / "trace.zip"):
         stale.unlink(missing_ok=True)
     frontier = Frontier(policy.max_depth)
     frontier.add(start, 0)
+    for seed in policy.seed_routes:
+        try:
+            candidate = normalize_url(seed, start)
+        except ValueError:
+            unknowns_seed = _unknown("unparseable_seed_route", seed, (seed,))
+            seeded_unknowns[unknowns_seed.id] = unknowns_seed
+            continue
+        if not is_allowed_url(candidate, start, policy.allowed_domains):
+            item = _unknown("seed_outside_allowed_origin", candidate, (candidate,))
+            seeded_unknowns[item.id] = item
+            continue
+        if is_denied_route(candidate, policy.denied_routes):
+            item = _unknown("seed_denied_by_route_policy", candidate, (candidate,))
+            seeded_unknowns[item.id] = item
+            continue
+        frontier.add(candidate, 0)
     pages: dict[str, PageState] = {}
     edges: dict[str, ActionEdge] = {}
     evidence: dict[str, Evidence] = {}
-    unknowns: dict[str, UnknownItem] = {}
+    unknowns: dict[str, UnknownItem] = dict(seeded_unknowns)
     started = time.monotonic()
     redactor = EvidenceRedactor.from_environment()
     stop_reason = "frontier_exhausted"
@@ -974,26 +1009,73 @@ def run_discovery(
 
 
 def authorization_findings(pages: Sequence[PageState]) -> tuple[str, ...]:
-    """Report routes whose reachability differs between crawled roles.
+    """Report where roles differ in what they can reach.
 
-    This is a within-release observation, not a verdict: two roles *should*
-    differ on a protected route. It becomes a regression only when compared
-    against an earlier release, which the snapshot diff does via the status
-    facet.
+    Two signals, because a privilege boundary shows itself differently depending
+    on how the application is built:
+
+    * **Status differences** — a server-rendered application answers 403 to the
+      wrong role, so the same route carries different statuses.
+    * **Reachability differences** — a single-page application usually enforces
+      access in the client: the guard redirects and the link is never rendered, so
+      every status is 200 and the boundary appears as a route being *absent* for a
+      role. An earlier version compared only statuses and therefore reported
+      nothing at all for such applications, which is most modern ones.
+
+    These are within-release observations, not verdicts. Roles *should* differ on
+    a protected route; the finding is the input to a human judgement, and the
+    regression signal comes from comparing against an earlier release.
     """
     by_route: dict[str, dict[str, int | None]] = {}
+    headings_by_route: dict[str, dict[str, frozenset[str]]] = {}
+    roles: set[str] = set()
     for page in pages:
-        by_route.setdefault(page.route, {})[page.role or "default"] = page.status
+        role = page.role or "default"
+        roles.add(role)
+        by_route.setdefault(page.route, {})[role] = page.status
+        headings_by_route.setdefault(page.route, {})[role] = frozenset(
+            heading.strip() for heading in page.headings if heading.strip()
+        )
     findings: list[str] = []
     for route, statuses in sorted(by_route.items()):
-        if len(statuses) < 2:
-            continue
-        distinct = {status for status in statuses.values()}
-        if len(distinct) > 1:
-            rendered = ",".join(
-                f"{role}={statuses[role]}" for role in sorted(statuses)
+        observed = set(statuses)
+        missing = roles - observed
+        if len(observed) > 1 and len({status for status in statuses.values()}) > 1:
+            rendered = ",".join(f"{role}={statuses[role]}" for role in sorted(observed))
+            findings.append(f"role_status_differs:{route}:{rendered}")
+        if missing and observed:
+            findings.append(
+                f"role_reachability_differs:{route}:"
+                f"reached={'|'.join(sorted(observed))}:absent={'|'.join(sorted(missing))}"
             )
-            findings.append(f"role_reachability_differs:{route}:{rendered}")
+        findings.extend(_heading_exclusivity(route, headings_by_route.get(route, {})))
+    return tuple(findings)
+
+
+def _heading_exclusivity(
+    route: str, headings: dict[str, frozenset[str]]
+) -> tuple[str, ...]:
+    """Report headings one role sees on a route that another role does not.
+
+    This is the signal a client-side access control actually produces. Comparing
+    page fingerprints would fire on almost every route, because a navigation bar
+    legitimately differs once a session exists; comparing *heading sets* isolates
+    the content the view itself rendered. On a real application this distinguishes
+    an administrator seeing "Administration" from a customer seeing the ordinary
+    page at the same route and the same HTTP status.
+    """
+    if len(headings) < 2:
+        return ()
+    findings: list[str] = []
+    for role, owned in sorted(headings.items()):
+        others: frozenset[str] = frozenset().union(
+            *(value for name, value in headings.items() if name != role)
+        ) if len(headings) > 1 else frozenset()
+        exclusive = sorted(owned - others)
+        if exclusive:
+            findings.append(
+                f"role_content_exclusive:{route}:{role}:{'|'.join(exclusive[:5])}"
+            )
     return tuple(findings)
 
 
@@ -1019,6 +1101,9 @@ def run_role_discovery(
             username_env=role.username_env,
             password_env=role.password_env,
             storage_state=role.storage_state if role.storage_state else base.storage_state,
+            # Suppress the login flow for an anonymous identity while leaving every
+            # other bound applied, so the two crawls stay comparable.
+            login_url=None if role.anonymous else base.login_url,
             save_storage_state=(
                 base.save_storage_state.parent / f"{role.name}.json"
                 if base.save_storage_state is not None

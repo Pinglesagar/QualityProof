@@ -149,7 +149,7 @@ def test_role_specs_parse_both_supported_forms(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "value",
-    ["", "Shopper:A:B", "shopper", "shopper:A", "shopper:A:B:C", "bad name=x.json"],
+    ["", "Shopper:A:B", "shopper:A", "shopper:A:B:C", "bad name=x.json"],
 )
 def test_malformed_role_specs_are_refused(value: str) -> None:
     """A role name reaches page-state ids and file paths, so it is constrained."""
@@ -157,8 +157,22 @@ def test_malformed_role_specs_are_refused(value: str) -> None:
         RoleSpec.parse(value)
 
 
-def test_cross_role_reachability_difference_is_reported() -> None:
-    """The observation that makes an authorization boundary visible."""
+def test_a_bare_role_name_is_an_anonymous_identity() -> None:
+    """Anonymous is a first-class role, not the absence of one.
+
+    "What can someone with no session reach" is the question a privilege boundary
+    is defined against, so it must be crawlable in the same pass as the
+    authenticated roles — otherwise the comparison has nothing to compare to.
+    """
+    role = RoleSpec.parse("anonymous")
+
+    assert role.name == "anonymous"
+    assert role.anonymous is True
+    assert role.storage_state is None
+
+
+def test_a_status_difference_between_roles_is_reported() -> None:
+    """A server-rendered application answers 403 to the wrong role."""
     pages = (
         PageState(id="s1", url="https://a.test/admin", route="/admin", status=403, role="shopper"),
         PageState(id="a1", url="https://a.test/admin", route="/admin", status=200, role="admin"),
@@ -169,14 +183,39 @@ def test_cross_role_reachability_difference_is_reported() -> None:
     findings = authorization_findings(pages)
 
     assert len(findings) == 1
-    assert findings[0].startswith("role_reachability_differs:/admin:")
+    assert findings[0].startswith("role_status_differs:/admin:")
     assert "shopper=403" in findings[0] and "admin=200" in findings[0]
 
 
-def test_a_route_seen_by_one_role_only_is_not_a_difference() -> None:
-    """Absence is not evidence of a permission change; it needs two observations."""
+def test_a_route_absent_for_one_role_is_reported_as_a_reachability_difference() -> None:
+    """The signal a single-page application actually produces.
+
+    A client-side guard redirects and never renders the link, so every status is
+    200 and the boundary shows up as the route being absent for a role. Comparing
+    only statuses reported nothing at all for such applications, which is most
+    modern ones.
+    """
     pages = (
-        PageState(id="s1", url="https://a.test/admin", route="/admin", status=200, role="admin"),
+        PageState(id="a1", url="https://a.test/admin", route="/admin", status=200, role="admin"),
+        PageState(id="s1", url="https://a.test/shop", route="/shop", status=200, role="admin"),
+        PageState(
+            id="s2", url="https://a.test/shop", route="/shop", status=200, role="shopper"
+        ),
+    )
+
+    findings = authorization_findings(pages)
+
+    assert len(findings) == 1
+    assert findings[0].startswith("role_reachability_differs:/admin:")
+    assert "reached=admin" in findings[0]
+    assert "absent=shopper" in findings[0]
+
+
+def test_a_route_reached_by_every_role_is_not_a_difference() -> None:
+    """The finding must not fire on ordinary shared pages."""
+    pages = (
+        PageState(id="a", url="https://a.test/x", route="/x", status=200, role="admin"),
+        PageState(id="b", url="https://a.test/x", route="/x", status=200, role="shopper"),
     )
 
     assert authorization_findings(pages) == ()

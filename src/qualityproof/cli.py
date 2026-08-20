@@ -223,6 +223,18 @@ def discover(
         list[str] | None,
         typer.Option("--viewport", help="Repeatable WIDTHxHEIGHT measured for layout overflow."),
     ] = None,
+    seed_route: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--seed-route",
+            help=(
+                "Repeatable route to probe in addition to followed links. A crawl "
+                "cannot find what is never linked, and an administrative surface is "
+                "routinely unlinked for the roles that must not reach it. Seeds obey "
+                "every other policy."
+            ),
+        ),
+    ] = None,
     save_storage_state: Annotated[
         Path | None,
         typer.Option(
@@ -263,6 +275,7 @@ def discover(
             username_env=username_env,
             password_env=password_env,
             viewports=viewports,
+            seed_routes=tuple(seed_route or ()),
             headless=not headed,
         )
         result = (
