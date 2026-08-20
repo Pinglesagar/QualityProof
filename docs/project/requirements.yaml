@@ -1,0 +1,121 @@
+schema_version: qualityproof-requirements/v1
+source_document: docs/project/SRS.md
+notice: GENERATED from the SRS. Do not edit by hand; run `python -m scripts.build_requirements`
+  instead.
+requirements:
+- id: JS-CAT-1
+  title: Catalogue is reachable without authentication
+  area: Anonymous browsing
+  description: The storefront **shall** present the product catalogue to an unauthenticated
+    visitor.
+  priority: P1
+- id: JS-CAT-2
+  title: Catalogue presents a primary heading
+  area: Anonymous browsing
+  description: The catalogue page **shall** expose exactly one level-one heading naming the
+    page, so assistive technology can announce it.
+  priority: P3
+- id: JS-CAT-3
+  title: Products are individually addressable
+  area: Anonymous browsing
+  description: Each catalogue entry **shall** be reachable at its own stable route.
+  priority: P2
+- id: JS-CAT-4
+  title: Catalogue is usable at a narrow viewport
+  area: Anonymous browsing
+  description: The catalogue **shall** render without horizontal overflow at a viewport width
+    of 375 CSS pixels.
+  priority: P3
+- id: JS-AUTH-1
+  title: A registered customer can authenticate
+  area: Authentication
+  description: A visitor holding valid credentials **shall** obtain an authenticated session.
+  priority: P1
+- id: JS-AUTH-2
+  title: The login form controls are programmatically labelled
+  area: Authentication
+  description: Email and password inputs **shall** each have an associated accessible name.
+  priority: P2
+- id: JS-AUTH-3
+  title: An authenticated session exposes a sign-out control
+  area: Authentication
+  description: An authenticated user **shall** be offered a means of ending the session.
+  priority: P2
+- id: JS-AUTH-4
+  title: Invalid credentials do not grant a session
+  area: Authentication
+  description: Authentication with incorrect credentials **shall not** produce an authenticated
+    session.
+  priority: P1
+- id: JS-BASKET-1
+  title: An authenticated customer has a basket
+  area: Basket and checkout
+  description: An authenticated customer **shall** be able to reach their basket.
+  priority: P1
+- id: JS-BASKET-2
+  title: The basket is not reachable anonymously
+  area: Basket and checkout
+  description: An unauthenticated visitor **shall not** reach a populated basket.
+  priority: P1
+- id: JS-CHECKOUT-1
+  title: Checkout is reachable from the basket
+  area: Basket and checkout
+  description: An authenticated customer with a basket **shall** be able to initiate checkout.
+  priority: P1
+- id: JS-PROFILE-1
+  title: A customer can reach their own profile
+  area: Customer profile
+  description: An authenticated customer **shall** be able to reach their profile page.
+  priority: P2
+- id: JS-PROFILE-2
+  title: Profile form controls are programmatically labelled
+  area: Customer profile
+  description: Every editable profile input **shall** have an associated accessible name.
+  priority: P2
+- id: JS-ADMIN-1
+  title: The administrative surface exists for administrators
+  area: Administrative boundary
+  description: An authenticated administrator **shall** be able to reach the administration
+    page.
+  priority: P2
+- id: JS-ADMIN-2
+  title: Ordinary customers are denied the administrative surface
+  area: Administrative boundary
+  description: An authenticated non-administrative customer **shall not** receive administrative
+    content.
+  priority: P1
+- id: JS-ADMIN-3
+  title: Anonymous visitors are denied the administrative surface
+  area: Administrative boundary
+  description: An unauthenticated visitor **shall not** receive administrative content.
+  priority: P1
+- id: JS-ADMIN-4
+  title: A change in role reachability is detectable between releases
+  area: Administrative boundary
+  description: Where a route's reachability for a given role changes between two releases,
+    the comparison **shall** report it.
+  priority: P1
+- id: JS-EV-1
+  title: Automated exploration shall not change application state
+  area: Evidence and process requirements
+  description: Discovery **shall** issue only read-only requests, save for one explicitly
+    configured authentication endpoint, and **shall not** activate controls.
+  priority: P1
+- id: JS-EV-2
+  title: Credentials shall not appear in retained evidence
+  area: Evidence and process requirements
+  description: No credential value supplied by environment variable **shall** appear in any
+    retained artefact.
+  priority: P1
+- id: JS-EV-3
+  title: A requirement is verified only against a registered source
+  area: Evidence and process requirements
+  description: A test **shall** be credited against a requirement only where the requirement
+    is registered and the citation resolves in that requirement's own recorded source.
+  priority: P1
+- id: JS-EV-4
+  title: Unproven requirements shall be reported on every run
+  area: Evidence and process requirements
+  description: Each pipeline run **shall** report requirements that no test references, and
+    requirements referenced only by tests that establish nothing.
+  priority: P1
