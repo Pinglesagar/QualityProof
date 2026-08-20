@@ -36,7 +36,7 @@
       "REQUIREMENT": 21,
       "UNATTRIBUTED": 6
     },
-    "benchmark_runtime_seconds": 0.050409,
+    "benchmark_runtime_seconds": 0.053954,
     "discovery_unknown_count": 4,
     "journeys_discovered": 8,
     "ledger_unknown_count": 1,

@@ -57,9 +57,14 @@ one route; with it, eight.
 |---|---|
 | Requirements registered | 21 |
 | Audit | 21 verified, 0 partial, 0 unknown |
-| Coverage | 21/21 verified — P1 13/13, P2 6/6, P3 2/2 |
+| Traceable to a verified test | 21/21 |
+| Demonstrated by a passing test | 20/21 — P1 13/13, P2 6/6, P3 1/2 |
 | Execution against the live app | 20 passed, 1 strict xfail |
 | Open findings | 1 |
+
+`JS-CAT-2` is the difference between those two coverage rows: perfectly traceable, and
+contradicted by evidence. A coverage report that collapses the two says 21/21 and is
+wrong about the thing that matters.
 
 Every one of the 21 tests carries a `REQUIREMENT` provenance record naming a requirement
 in `requirements.yaml`, and the auditor re-reads that file and checks the recorded digest

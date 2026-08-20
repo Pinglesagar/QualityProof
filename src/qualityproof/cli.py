@@ -50,6 +50,7 @@ from qualityproof.models import (
     RequirementPriority,
     ScenarioSpec,
     SemanticCandidate,
+    Verdict,
 )
 from qualityproof.reporting import write_html_report, write_json_report
 from qualityproof.repository import SQLiteRepository
@@ -637,6 +638,17 @@ def coverage(
             ),
         ),
     ] = None,
+    require_demonstrated: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--require-demonstrated",
+            help=(
+                "Repeatable. Exit non-zero if any requirement at this priority is not "
+                "demonstrated by a passing test. Stricter than --require-priority, "
+                "which only asks whether a resolvable test claims it."
+            ),
+        ),
+    ] = None,
 ) -> None:
     """Report which requirements are NOT proven, and gate CI on it.
 
@@ -659,6 +671,10 @@ def coverage(
     # importing a registry afterwards would otherwise leave a stale VERIFIED in
     # place and keep the gate green over evidence that no longer holds.
     stored = repository.list("ledger", LedgerEntry)
+    # Execution verdicts are a separate axis from traceability. Without them this
+    # report answered "does a resolvable test claim this requirement" and printed
+    # the answer under the word "verified", which reads as "the software does this".
+    verdicts = repository.list("verdict", Verdict)
     reclassified = build_ledger(
         tuple(entry.test for entry in stored),
         project=project,
@@ -671,19 +687,34 @@ def coverage(
             if entry.status is not fresh.status
         )
     )
-    report = compute_coverage(requirements, reclassified)
+    report = compute_coverage(requirements, reclassified, verdicts)
     json_path, markdown_path = write_coverage_reports(
         report, project / config.report_directory
     )
     summary = report.summary()
     typer.echo(
-        f"Requirements: {summary['requirements']}; verified {summary['verified']}; "
+        f"Requirements: {summary['requirements']}; traced {summary['verified']}; "
+        f"demonstrated {summary['demonstrated']}; "
         f"partial {summary['partial']}; uncovered {summary['uncovered']}; "
         f"orphan links {summary['orphan_link_count']}; "
         f"untraced tests {summary['untraced_test_count']}."
     )
     for band, counts in report.by_priority().items():
-        typer.echo(f"  {band}: {counts['verified']}/{counts['total']} verified")
+        typer.echo(
+            f"  {band}: {counts['verified']}/{counts['total']} traced, "
+            f"{counts['demonstrated']}/{counts['total']} demonstrated"
+        )
+    if report.traced_not_demonstrated:
+        typer.echo(
+            "Traceable but NOT demonstrated: "
+            f"{', '.join(report.traced_not_demonstrated)}"
+        )
+        for item in report.requirements:
+            if item.requirement_id in report.traced_not_demonstrated:
+                typer.echo(
+                    f"  {item.requirement_id}: {item.execution.value}"
+                    f" ({', '.join(item.failing_tests) or 'no verdict'})"
+                )
     if report.uncovered:
         typer.echo(f"Uncovered: {', '.join(report.uncovered)}")
     if report.orphan_links:
@@ -705,19 +736,30 @@ def coverage(
         failures.append(f"{len(report.uncovered)} requirement(s) have no referencing test")
     if fail_on_orphans and report.orphan_links:
         failures.append(f"{len(report.orphan_links)} orphan requirement link(s)")
-    for raw in require_priority or ():
+    def _band(raw: str, option: str) -> RequirementPriority:
         try:
-            band = RequirementPriority(raw.strip().upper())
+            return RequirementPriority(raw.strip().upper())
         except ValueError as error:
             raise typer.BadParameter(
-                f"--require-priority must be one of "
+                f"{option} must be one of "
                 f"{', '.join(item.value for item in RequirementPriority)}"
             ) from error
+
+    for raw in require_priority or ():
+        band = _band(raw, "--require-priority")
         unproven = report.unproven_at(band)
         if unproven:
             failures.append(
                 f"{len(unproven)} {band.value} requirement(s) not verified: "
                 f"{', '.join(unproven)}"
+            )
+    for raw in require_demonstrated or ():
+        band = _band(raw, "--require-demonstrated")
+        undemonstrated = report.undemonstrated_at(band)
+        if undemonstrated:
+            failures.append(
+                f"{len(undemonstrated)} {band.value} requirement(s) not demonstrated by a "
+                f"passing test: {', '.join(undemonstrated)}"
             )
     if failures:
         for failure in failures:

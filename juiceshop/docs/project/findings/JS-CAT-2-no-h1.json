@@ -1,8 +1,9 @@
 {
-  "finding_id": "JS-CAT-2-no-h1",
   "title": "Catalogue presents no level-one heading",
   "summary": "The product catalogue at /#/search contains no level-one heading at all. The highest-ranked heading in the document is an h2 carrying the site brand in the toolbar, so no heading names the page. A screen-reader user navigating by heading level has nothing that identifies where they are. Confirmed by a requirement-traced test that is recorded as a strict expected failure, so fixing the application will surface here rather than silently passing.",
-  "requirement_ids": ["JS-CAT-2"],
+  "requirement_ids": [
+    "JS-CAT-2"
+  ],
   "route": "/#/search",
   "severity": "medium",
   "evidence": {
@@ -18,6 +19,7 @@
     "specification": "docs/project/SRS.md",
     "authorisation": "docs/project/AUTHORISATION.md",
     "detected_by": "accessibility facet during role-scoped discovery, corrected after manual verification",
-    "correction_note": "An earlier revision of this finding recorded three level-one headings, naming 'Welcome to OWASP Juice Shop!' and 'https://owasp-juice.shop'. That was wrong. Both of those headings belong to the first-visit welcome banner, which is a modal dialog rendered above the page, and neither is page content. The catalogue itself has none. The error came from the accessibility facet, whose missing-h1 check used document.querySelector('h1') and so counted the dialog's headings as the page's - it therefore reported no defect on a page that has no heading at all. The detector now scopes document-outline checks to page content, excluding dialog subtrees, and records modal_dialog_open as context when a dialog covers the page."
+    "correction_note": "An earlier revision of this finding recorded three level-one headings, naming 'Welcome to OWASP Juice Shop!' and 'https://owasp-juice.shop'. That was wrong. Both of those headings belong to the first-visit welcome banner, which is a modal dialog rendered above the page, and neither is page content. The catalogue itself has none. The error came from the accessibility facet, whose missing-h1 check used document.querySelector('h1') and so counted the dialog's headings as the page's - it therefore reported no defect on a page that has no heading at all. The detector now scopes document-outline checks to page content, excluding dialog subtrees, and records modal_dialog_open as context when a dialog covers the page.",
+    "finding_id": "JS-CAT-2-no-h1"
   }
 }

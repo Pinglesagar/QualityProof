@@ -103,10 +103,16 @@ expressly to be tested, with a written BRS, SRS, test plan and authorisation bas
 | | |
 |---|---|
 | Requirements registered | 21 |
-| Audit | 21 verified, 0 partial, 0 unknown |
-| Coverage | 21/21 — P1 13/13, P2 6/6, P3 2/2 |
+| Traceable to a verified test | 21/21 |
+| **Demonstrated by a passing test** | **20/21** — P1 13/13, P2 6/6, P3 1/2 |
 | Live execution | 20 passed, 1 strict xfail |
 | Open findings | 1, accessibility, found by the tool |
+
+Those two coverage rows are deliberately separate. Traceability asks whether a resolvable
+test claims the requirement; demonstration asks whether the software actually does it. The
+report said 21/21 verified while an open defect sat against one of them, because it never
+consulted the execution verdicts it was already storing. `--require-priority P3` passes on
+that requirement and `--require-demonstrated P3` fails on it, which is the distinction.
 
 This is bounded at eight routes and does not test checkout or payment. What it does
 demonstrate is that the traceability holds against software the author did not write.
