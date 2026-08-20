@@ -167,7 +167,7 @@ jobs:
         # A pinned asset download has no API lookup, no third-party installer, and
         # its errors surface in this job's own log.
         env:
-          TRIVY_VERSION: 0.64.1
+          TRIVY_VERSION: 0.74.0
         run: |
           set -euo pipefail
           archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"

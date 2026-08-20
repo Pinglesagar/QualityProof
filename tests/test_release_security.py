@@ -65,9 +65,21 @@ def test_supply_chain_and_azure_defaults_are_narrow_and_immutable() -> None:
     deployment = (root / "infra/main.bicep").read_text(encoding="utf-8")
 
     assert "@sha256:" in dockerfile.splitlines()[1]
-    assert "aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4" in workflow
-    assert "image-ref: qualityproof-control:test" in workflow
-    assert "image-ref: qualityproof-job:test" in workflow
+    # The scanner is installed from a pinned release asset with its checksum
+    # verified, rather than through an installer that resolves a tag over the
+    # GitHub API. That lookup is rate limited, and when it failed the step looked
+    # exactly like a vulnerability finding. What this test guards is unchanged:
+    # the scanner version must be fixed and its download verified.
+    assert "TRIVY_VERSION:" in workflow
+    assert "releases/download/v${TRIVY_VERSION}" in workflow
+    assert "sha256sum -c -" in workflow
+    assert "aquasecurity/trivy-action" not in workflow, (
+        "the tag-resolving installer must not come back"
+    )
+    # Both images are still scanned, and the gate still enforces.
+    assert "qualityproof-control qualityproof-job" in workflow
+    assert "--severity CRITICAL,HIGH --exit-code 1" in workflow
+    assert "--ignore-unfixed" in workflow
     assert "allowSharedKeyAccess: jobTriggerType == 'Event'" in deployment
     assert "param controlApiToken string" in deployment
     assert "param controlReportToken string" in deployment
