@@ -1,0 +1,13 @@
+# Requirements referenced by the example TypeScript suite.
+# The engine resolves each provenance locator against this file, so a
+# TypeScript test can reach VERIFIED on exactly the same terms as a Python one.
+requirements:
+  - id: CHECKOUT-014
+    title: Catalogue is navigable
+    description: >-
+      The catalogue page presents a level-one heading and a link to the cart so a
+      shopper can always find their basket.
+  - id: CHECKOUT-015
+    title: Add to cart is operable
+    description: >-
+      Each product page exposes an add-to-cart control with an accessible name.

@@ -1,0 +1,59 @@
+{
+  "name": "@qualityproof/playwright",
+  "version": "0.1.0",
+  "description": "Playwright Test reporter and annotations that feed the QualityProof evidence engine",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./reporter": {
+      "types": "./dist/reporter.d.ts",
+      "default": "./dist/reporter.js"
+    },
+    "./analyze": {
+      "types": "./dist/analyze.d.ts",
+      "default": "./dist/analyze.js"
+    }
+  },
+  "bin": {
+    "qualityproof-ts": "./bin/qualityproof-ts.mjs"
+  },
+  "scripts": {
+    "schema": "node ./scripts/generate-types.mjs",
+    "build": "npm run schema && tsc -p tsconfig.build.json && npm run link:self",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "example": "playwright test -c example/playwright.config.ts",
+    "link:self": "node ./scripts/link-self.mjs"
+  },
+  "peerDependencies": {
+    "@playwright/test": ">=1.54"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^22.10.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "eslint": "^9.17.0",
+    "json-schema-to-typescript": "^15.0.3",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vitest": "^4.1.11"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
