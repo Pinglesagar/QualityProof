@@ -53,9 +53,10 @@ requirements:
   description: An authenticated customer **shall** be able to reach their basket.
   priority: P1
 - id: JS-BASKET-2
-  title: The basket is not reachable anonymously
+  title: A visitor shall not see another party's basket contents
   area: Basket and checkout
-  description: An unauthenticated visitor **shall not** reach a populated basket.
+  description: An unauthenticated visitor **shall not** be shown basket contents belonging
+    to any authenticated account. A guest basket scoped to the anonymous session is permitted.
   priority: P1
 - id: JS-CHECKOUT-1
   title: Checkout is reachable from the basket

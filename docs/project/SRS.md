@@ -1,7 +1,7 @@
 # Software Requirements Specification
 
 **Project:** Quality evidence programme for the OWASP Juice Shop storefront
-**Document ID:** SRS-JS-001 · **Version:** 1.0 · **Traces to:** [BRS-JS-001](BRS.md)
+**Document ID:** SRS-JS-001 · **Version:** 1.1 · **Traces to:** [BRS-JS-001](BRS.md)
 
 > Requirements are numbered, atomic and testable. Each states an observable
 > behaviour, not an implementation. The machine-readable form in
@@ -64,9 +64,12 @@ session. *Priority: P1. Verification: negative authentication check.*
 An authenticated customer **shall** be able to reach their basket.
 *Priority: P1. Verification: authenticated route reachability.*
 
-### JS-BASKET-2 — The basket is not reachable anonymously
-An unauthenticated visitor **shall not** reach a populated basket.
-*Priority: P1. Verification: differential role reachability.*
+### JS-BASKET-2 — A visitor shall not see another party's basket contents
+An unauthenticated visitor **shall not** be shown basket contents belonging to any
+authenticated account. A guest basket scoped to the anonymous session is
+permitted. *Priority: P1. Verification: differential role content comparison — the basket
+view rendered for an anonymous session must not contain an authenticated
+account's identifier or items.*
 
 ### JS-CHECKOUT-1 — Checkout is reachable from the basket
 An authenticated customer with a basket **shall** be able to initiate checkout.
@@ -148,12 +151,27 @@ Generated per-requirement coverage lives in [`RTM.md`](RTM.md) and is produced b
 records what someone believed, which is precisely the problem this programme exists
 to remove.
 
+## Revision history
+
+| Version | Change | Why |
+|---|---|---|
+| 1.0 | Initial baseline | — |
+| 1.1 | `JS-BASKET-2` rewritten | The original text — "an unauthenticated visitor shall not reach a populated basket" — was written from assumption rather than observation, and the application contradicts it: `/#/basket` renders "Your Basket (anonymous)" for a session with no account. The requirement conflated two different things: *reaching a basket view*, which is ordinary guest-cart behaviour, and *seeing someone else's basket contents*, which is the actual security property. The requirement now states the property that matters. The tool found this, which is the point of it. |
+
+Amendments are recorded rather than edited in silently. A requirement baseline
+whose history is invisible cannot be audited, and "the spec always said that" is
+not a claim anyone should have to take on trust.
+
 ## Known limitations of this baseline
 
 - Requirements describe behaviour observable through the UI and HTTP surface. They
   do not constrain internal design.
-- `JS-AUTH-4` and `JS-BASKET-2` are negative requirements. Automated discovery can
-  observe a denial but cannot prove that *no* path exists; these are evidenced as
-  observations at a stated confidence, never as proof.
+- `JS-AUTH-4`, `JS-BASKET-2`, `JS-ADMIN-2` and `JS-ADMIN-3` are negative
+  requirements. Automated discovery can observe a denial on the paths it tried but
+  cannot prove that *no* path exists; these are evidenced as bounded observations,
+  never as proof of absence.
+- Requirements written before observing the application are hypotheses. `JS-BASKET-2`
+  was one, and was wrong. Where evidence contradicts the baseline, the baseline is
+  amended and the amendment recorded — the tests are not adjusted to agree with it.
 - The deliberately planted vulnerabilities in the system under test are out of
   scope by [BRS §5](BRS.md).
