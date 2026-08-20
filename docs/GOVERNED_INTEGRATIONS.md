@@ -9,19 +9,39 @@ project key, and fingerprint, so repeated applied syncs update the same issue wi
 a mock, tenant, account, or project mapping in another scope. Descriptions are Atlassian Document
 Format (ADF), and evidence is recursively redacted before it reaches any adapter.
 
-For Jira Cloud REST v3, use:
+`--issue-type` selects the type to create, defaulting to `Bug`. Issue types are per-project, so
+confirm yours exists under *Project settings -> Issue types*; a type the project does not define is
+rejected by Jira as an opaque validation error at write time.
+
+For Jira Cloud REST v3 there are two supported credentials. An Atlassian API token, which is the
+short path for a single user:
+
+```console
+export QUALITYPROOF_JIRA_EMAIL="you@example.com"
+export QUALITYPROOF_JIRA_API_TOKEN="<token from id.atlassian.com/manage-profile/security/api-tokens>"
+qualityproof jira sync finding.json --project-key QP --adapter cloud \
+  --base-url https://your-site.atlassian.net
+# Review the dry-run, then repeat with --apply.
+```
+
+Or a short-lived OAuth access token, which is what a shared or automated deployment should use:
 
 ```console
 export QUALITYPROOF_JIRA_BEARER_TOKEN="<short-lived OAuth access token>"
 qualityproof jira sync finding.json --project-key QP --adapter cloud \
   --base-url https://api.atlassian.com/ex/jira/YOUR-CLOUD-ID
-# Review the dry-run, then repeat with --apply.
 ```
 
-QualityProof does not request, collect, or store personal API tokens. Cloud credentials are read
-only from `QUALITYPROOF_JIRA_BEARER_TOKEN` and retained only in process memory. Never put tokens,
-OAuth codes, PKCE verifiers, or client secrets in `qualityproof.toml`, findings, shell history, or
-source control.
+The API token is sent as HTTP Basic `email:token`, which is what Atlassian's REST API expects; the
+OAuth token is sent as `Bearer`. When both are present the API token wins. A half-configured Basic
+credential -- a token with no email, or an email with no token -- is refused rather than silently
+falling back, because the fallback would send a request that fails for a reason the error does not
+name.
+
+QualityProof does not request, collect, or store credentials. They are read only from those
+environment variables and retained only in process memory. Never put tokens, OAuth codes, PKCE
+verifiers, or client secrets in `qualityproof.toml`, findings, shell history, or source control. A
+token that has been pasted anywhere shared should be revoked and reissued rather than reused.
 
 For Atlassian OAuth 2.0 (3LO), register a public/native OAuth client and exact redirect URI, then
 run `qualityproof jira auth-url --client-id ... --redirect-uri ...`. It emits a fresh random state,

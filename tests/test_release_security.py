@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from qualityproof.security import EvidenceRedactor
+from qualityproof.security import ArtifactMode, ArtifactPolicy, EvidenceRedactor
 from scripts.run_azure_job import _validated_run_id
 
 
@@ -85,3 +85,87 @@ def test_supply_chain_and_azure_defaults_are_narrow_and_immutable() -> None:
     assert "param controlReportToken string" in deployment
     assert "secretRef: 'api-token'" in deployment
     assert "secretRef: 'report-token'" in deployment
+
+
+def test_configuration_flag_values_are_not_treated_as_secrets() -> None:
+    """A flag named like a secret must not rewrite digits across the evidence.
+
+    ``CLAUDE_CODE_CHILD_SESSION=1`` matched the secret-name pattern through its
+    name, and short values are redacted on word boundaries, so the digit 1 was
+    replaced everywhere. A real Juice Shop run therefore reported
+    ``"<REDACTED> xfailed"`` instead of ``"1 xfailed"``: redaction had corrupted
+    the count it existed to protect.
+    """
+    redactor = EvidenceRedactor.from_environment(
+        {"CHILD_SESSION": "1", "DEBUG_TOKEN": "true", "REAL_TOKEN": "s3cret-value"}
+    )
+    summary = redactor.text("20 passed, 1 xfailed in 12.86s")
+    assert summary == "20 passed, 1 xfailed in 12.86s"
+    assert redactor.text("flag true here") == "flag true here"
+    assert "s3cret-value" not in redactor.text("header s3cret-value")
+
+
+def test_short_credentials_are_still_redacted_on_word_boundaries() -> None:
+    """Excluding flag values must not excuse a genuinely short credential."""
+    redactor = EvidenceRedactor.from_environment({"CARD_PASS": "4821"})
+    assert redactor.text("pin 4821 entered") == "pin <REDACTED> entered"
+    # Bounded, so an unrelated number that merely contains it survives intact.
+    assert redactor.text("order 148213") == "order 148213"
+
+
+def test_working_directory_is_not_redacted_from_evidence_paths() -> None:
+    """PWD matches the secret-name pattern but its value is a public path.
+
+    Redacting it replaced every absolute path in an evidence bundle, including
+    trace and artifact locations, which makes a failure undiagnosable.
+    """
+    redactor = EvidenceRedactor.from_environment(
+        {"PWD": "/Users/me/proj", "OLDPWD": "/Users/me", "API_TOKEN": "s3cret-value"}
+    )
+    trace = "trace at /Users/me/proj/.qualityproof/runs/run-1/trace.zip"
+    assert redactor.text(trace) == trace
+    assert "s3cret-value" not in redactor.text("token s3cret-value")
+
+
+def test_a_plain_shell_environment_still_captures_failure_artifacts() -> None:
+    """PWD and USER are set by every POSIX shell and are not credentials.
+
+    Both name-matched the redaction pattern, which ArtifactPolicy reused as its
+    authentication signal, so every run on every machine was classed as
+    authenticated and traces were disabled unconditionally. The feature was dead
+    in practice and only surfaced when a real Juice Shop run reported
+    ``artifacts=off ... disabled_by=...,PWD,USER,...``.
+    """
+    policy = ArtifactPolicy.from_environment(
+        {"PWD": "/Users/me/proj", "USER": "me", "HOME": "/Users/me", "SHELL": "/bin/zsh"}
+    )
+    assert policy.mode is ArtifactMode.ON_FAILURE
+    assert policy.authenticated is False
+    assert policy.reasons == ()
+
+
+def test_a_real_credential_still_disables_artifact_capture() -> None:
+    """Narrowing the signal must not stop a genuine secret from closing the gate."""
+    policy = ArtifactPolicy.from_environment(
+        {"PWD": "/Users/me/proj", "USER": "me", "GITHUB_TOKEN": "ghp_realvalue"}
+    )
+    assert policy.mode is ArtifactMode.OFF
+    assert policy.authenticated is True
+    assert policy.reasons == ("GITHUB_TOKEN",)
+
+
+def test_a_credential_named_variable_holding_a_flag_is_not_a_credential() -> None:
+    """A variable set to "1" carries no secret, whatever it is called."""
+    policy = ArtifactPolicy.from_environment({"PWD": "/x", "CHILD_SESSION": "1"})
+    assert policy.authenticated is False
+    assert policy.mode is ArtifactMode.ON_FAILURE
+
+
+def test_an_account_name_is_redacted_without_implying_a_credential() -> None:
+    """The two questions are distinct: redact the identity, do not gate on it."""
+    environ = {"QUALITYPROOF_USERNAME": "real.person@example.test"}
+    assert ArtifactPolicy.from_environment(environ).authenticated is False
+    redacted = EvidenceRedactor.from_environment(environ).text(
+        "login failed for real.person@example.test"
+    )
+    assert "real.person@example.test" not in redacted

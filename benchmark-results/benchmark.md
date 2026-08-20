@@ -5,15 +5,15 @@
 - QualityProof recall: 1.000
 - Matched finding IDs: SEED-A11Y-001, SEED-AUTHZ-001, SEED-JOURNEY-001, SEED-LAYOUT-001, SEED-LINK-001, SEED-LOCATOR-001, SEED-SAFETY-001, SEED-TOTAL-001, SEED-VALIDATION-001
 - Missed finding IDs: none
-- False-positive signals: execution_finding:journey-4a3ee525d17f, execution_finding:journey-c44b76cbcb5f
+- False-positive signals: execution_finding:journey-45b88468bc87, execution_finding:journey-c98448123e49
 - Route retargets (one finding, not two): route_retargeted:/help->/missing-help
 - Context changes (not scored as findings): application_metadata_changed:demo_version, route_removed:/help
 - Signals rejected for wrong cause: none
 - Fixture integrity checks (not product detections): 9/9 passed
 - Assertions by provenance: {"OBSERVATION": 32, "REQUIREMENT": 21, "UNATTRIBUTED": 6}
 - Ledger unknown count: 1
-- Discovery unknown count: 2
-- Benchmark runtime: 0.038650 seconds
+- Discovery unknown count: 4
+- Benchmark runtime: 0.047807 seconds
 
 Direct fixture checks are setup integrity checks, not QualityProof findings. No third-party tool was run and no comparative claim is made.
 

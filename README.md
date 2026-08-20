@@ -65,7 +65,7 @@ breakdown below, not on that assurance.
 | Unmatched signals | 2, both disclosed |
 | Branch coverage (self) | 78% (`audit.py` 88%, `security.py` 95%) |
 | Mutation score, trust modules | 67.5% (`audit.py` 84.5%) — measured before the latest 74 tests |
-| Python tests | 259 |
+| Python tests | 290 |
 | TypeScript tests | 31 |
 
 **Read recall as 9/9 of a fixture the author wrote, not as a detection rate.**
@@ -93,6 +93,23 @@ trust logic, which produced 46 boundary tests and took `audit.py` from 63.9% to
 
 Scope: one controlled fixture. No third-party tool was run and no general
 accuracy is claimed. See [the controlled demo](docs/CONTROLLED_DEMO.md).
+
+### Against a real third-party application
+
+The fixture above is the author's own. [`juiceshop/`](juiceshop/README.md) is the same
+pipeline run end to end against OWASP Juice Shop v20.2.0, an application published
+expressly to be tested, with a written BRS, SRS, test plan and authorisation basis:
+
+| | |
+|---|---|
+| Requirements registered | 21 |
+| Audit | 21 verified, 0 partial, 0 unknown |
+| Coverage | 21/21 — P1 13/13, P2 6/6, P3 2/2 |
+| Live execution | 20 passed, 1 strict xfail |
+| Open findings | 1, accessibility, found by the tool |
+
+This is bounded at eight routes and does not test checkout or payment. What it does
+demonstrate is that the traceability holds against software the author did not write.
 
 ## How it works
 
@@ -231,17 +248,22 @@ not compete with it on execution.
 
 ## Known gaps
 
-- **No git history.** In a project about provenance, this is the most damaging
-  gap: no narrative about how a number changed is falsifiable without it.
-- Artifact capture is disabled whenever *any* environment variable whose **name**
-  looks credential-shaped is set — `GITHUB_TOKEN` alone is enough. That is the
-  intended default, but it means a real environment often records no browser
-  evidence; the policy now names the variables responsible instead of failing
-  silently.
+- Artifact capture is disabled whenever an environment variable that plausibly
+  holds a credential is set — `GITHUB_TOKEN` alone is enough. That is the intended
+  default, and the policy names the variables responsible instead of failing
+  silently. It was **not** working as documented until running the Juice Shop
+  engagement exposed it: the gate reused the redaction pattern, which matches `PWD`
+  and `USER`, and those are set by every POSIX shell. Every run on every machine
+  was therefore classed as authenticated and traces were disabled unconditionally.
+  The credential signal is now separate and narrower than the redaction rule,
+  because the two answer different questions: a username identifies an account but
+  cannot authenticate as one.
 - The facet-category rule that makes page-state matching strict lives in
   `scripts/benchmark_demo.py`, not in `src/`, and rejects nothing on the shipped
   fixture.
-- Docker builds and Trivy scans are configured but unexercised locally.
+- Docker builds and Trivy image scans run in CI but cannot be exercised locally
+  (no Docker on the development machine), so a break in them is only visible after
+  a push.
 - Mutation score covers four trust-critical modules only; the raw figure
   understates defended logic because mutants that only alter a human-readable
   message count as survivors. `generation.py` (55.0%) is weakest and is mostly

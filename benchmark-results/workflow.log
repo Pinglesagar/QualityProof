@@ -4,26 +4,26 @@ Initialized /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/.qual
 Exported 29 versioned schemas
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli discover http://127.0.0.1:8765/products --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --login-url http://127.0.0.1:8765/login --username-selector #email --password-selector #password --submit-selector button[type=submit] --login-submit-method POST --login-submit-path /login --role shopper:QUALITYPROOF_SHOPPER_USERNAME:QUALITYPROOF_SHOPPER_PASSWORD --save-storage-state /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/.qualityproof/auth/role.json --role admin:QUALITYPROOF_ADMIN_USERNAME:QUALITYPROOF_ADMIN_PASSWORD --allowed-domain 127.0.0.1 --max-pages 30 --max-depth 4 --max-actions 60 --max-runtime 30
-Discovered 20 pages and 18 actions; 3 blocked/unknown (shopper:frontier_exhausted; admin:frontier_exhausted).
+Discovered 20 pages and 18 actions; 7 blocked/unknown (shopper:frontier_exhausted; admin:frontier_exhausted).
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli plan --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --scenario-role shopper --requirements /Users/propertyloop03/qualityproof/examples/demo-requirements.yaml
 Wrote 8 generated drafts.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli review --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --decision approve --actor demo-reviewer --reason Controlled local benchmark fixture
-Approved journey-4a3ee525d17f.
-Approved journey-5f86e6974307.
-Approved journey-6d6fd9913353.
-Approved journey-6d958dfdad45.
-Approved journey-9349a7aa4c0b.
-Approved journey-9d7af313a4db.
-Approved journey-c44b76cbcb5f.
-Approved journey-eb9067625f72.
+Approved journey-31609b8a5e62.
+Approved journey-45b88468bc87.
+Approved journey-66be77e6cbb2.
+Approved journey-685ec45fe33e.
+Approved journey-786f71ad872c.
+Approved journey-87d6fb0ec977.
+Approved journey-b0da027f3ab7.
+Approved journey-c98448123e49.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli generate --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
 Generated and validated 8 tests.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli test --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
-Run run-16481f33061c41429fccc6fd288d3cc1 passed; result: .qualityproof/runs/run-16481f33061c41429fccc6fd288d3cc1/result.json; evidence: 0.
+Run run-520ddbbff9394091a5e1f32c8f515036 passed; result: .qualityproof/runs/run-520ddbbff9394091a5e1f32c8f515036/result.json; evidence: 0.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli requirements import /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/demo/seeded-defects.json --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --scope demo-seed-manifest
 Registered 9 requirements in scope 'demo-seed-manifest': SEED-A11Y-001, SEED-AUTHZ-001, SEED-JOURNEY-001, SEED-LAYOUT-001, SEED-LINK-001 ...
@@ -47,10 +47,10 @@ $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli snapsh
 Wrote immutable snapshot /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/.qualityproof/snapshots/demo-v1.json
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli discover http://127.0.0.1:8765/products --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --login-url http://127.0.0.1:8765/login --username-selector #email --password-selector #password --submit-selector button[type=submit] --login-submit-method POST --login-submit-path /login --role shopper:QUALITYPROOF_SHOPPER_USERNAME:QUALITYPROOF_SHOPPER_PASSWORD --save-storage-state /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/.qualityproof/auth/role.json --role admin:QUALITYPROOF_ADMIN_USERNAME:QUALITYPROOF_ADMIN_PASSWORD --allowed-domain 127.0.0.1 --max-pages 30 --max-depth 4 --max-actions 60 --max-runtime 30
-Discovered 18 pages and 16 actions; 2 blocked/unknown (shopper:frontier_exhausted; admin:frontier_exhausted).
+Discovered 18 pages and 16 actions; 4 blocked/unknown (shopper:frontier_exhausted; admin:frontier_exhausted).
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli test --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
-Run run-d9ae23714f2f411d8c186b14edb18f07 failed; result: .qualityproof/runs/run-d9ae23714f2f411d8c186b14edb18f07/result.json; evidence: 0.
+Run run-94d85994ae6648a48948fea644015eef failed; result: .qualityproof/runs/run-94d85994ae6648a48948fea644015eef/result.json; evidence: 0.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli snapshot create demo-v2 --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --application /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/application.json
 Wrote immutable snapshot /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/.qualityproof/snapshots/demo-v2.json

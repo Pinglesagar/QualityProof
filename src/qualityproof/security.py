@@ -34,24 +34,82 @@ _ENV_SECRET_NAME = re.compile(
 )
 #: Below this length a value is too generic to replace safely: substituting every
 #: occurrence of a two-character secret would corrupt unrelated evidence and make
-#: the output useless for diagnosis.
+#: the output useless for diagnosis. Shorter values are still redacted, but only
+#: on word boundaries and only when they are not in NON_SECRET_VALUES.
 MIN_REDACTABLE_LENGTH = 6
+#: Values that are configuration, never credentials. A feature flag set to "1"
+#: matched the secret-name pattern via its variable name and, being word-bounded,
+#: rewrote the digit 1 everywhere -- which turned a real run summary into
+#: "<REDACTED> xfailed". Redaction that corrupts counts destroys the evidence it
+#: is meant to protect, so these values are never treated as secrets.
+NON_SECRET_VALUES = frozenset(
+    {"0", "1", "true", "false", "yes", "no", "on", "off", "none", "null", "-", "."}
+)
+#: Variables whose names match the secret pattern but whose values are structurally
+#: public. PWD is the working directory: redacting it replaces every absolute path
+#: in an evidence bundle with a placeholder, which is the opposite of diagnosable.
+#: The rest are standard shell and desktop variables that name-match by accident.
+NON_SECRET_ENV_NAMES = frozenset(
+    {
+        "PWD",
+        "OLDPWD",
+        "CWD",
+        "SSH_AUTH_SOCK",
+        "SESSION_MANAGER",
+        "DBUS_SESSION_BUS_ADDRESS",
+        "XDG_SESSION_ID",
+        "XDG_SESSION_TYPE",
+        "XDG_SESSION_CLASS",
+        "XDG_SESSION_DESKTOP",
+        "SECURITYSESSIONID",
+        "TERM_SESSION_ID",
+        "ITERM_SESSION_ID",
+        "__CF_USER_TEXT_ENCODING",
+    }
+)
+#: Names that indicate the process actually holds a credential. Deliberately
+#: narrower than _ENV_SECRET_NAME, because the two patterns answer different
+#: questions and conflating them broke artifact capture outright: PWD and USER are
+#: set by every POSIX shell, both name-matched, so every run on every machine was
+#: classed as authenticated and traces were disabled unconditionally -- the exact
+#: failure the reasons field exists to make visible. A username or email
+#: identifies an account but cannot authenticate as one, so it is redacted from
+#: evidence without implying the run carries secrets.
+_ENV_CREDENTIAL_NAME = re.compile(
+    r"(?:^|_)(?:"
+    r"PASS|PASSWORD|PASSPHRASE|PWD|SECRET|TOKEN|KEY|APIKEY|CREDENTIAL|CREDENTIALS"
+    r"|AUTH|AUTHORIZATION|COOKIE|SESSION|BEARER"
+    r")(?:_|$)",
+    re.I,
+)
+
+
+def holds_credential(name: str, value: str) -> bool:
+    """Report whether one variable is evidence that this run carries a secret."""
+    if not value or name.upper() in NON_SECRET_ENV_NAMES:
+        return False
+    if value.strip().lower() in NON_SECRET_VALUES:
+        return False
+    return bool(_ENV_CREDENTIAL_NAME.search(name))
 
 
 class EvidenceRedactor:
     """Redact known runtime secrets and common credential shapes."""
 
     def __init__(self, secrets: Sequence[str] = ()) -> None:
+        candidates = {
+            value for value in secrets if value.strip().lower() not in NON_SECRET_VALUES
+        }
         self._secrets = tuple(
             sorted(
-                {value for value in secrets if len(value) >= MIN_REDACTABLE_LENGTH},
+                {value for value in candidates if len(value) >= MIN_REDACTABLE_LENGTH},
                 key=len,
                 reverse=True,
             )
         )
         self._short_secrets = tuple(
             sorted(
-                {value for value in secrets if 0 < len(value) < MIN_REDACTABLE_LENGTH},
+                {value for value in candidates if 0 < len(value) < MIN_REDACTABLE_LENGTH},
                 key=len,
                 reverse=True,
             )
@@ -68,7 +126,9 @@ class EvidenceRedactor:
         values = [
             value
             for name, value in source.items()
-            if value and _ENV_SECRET_NAME.search(name)
+            if value
+            and name.upper() not in NON_SECRET_ENV_NAMES
+            and _ENV_SECRET_NAME.search(name)
         ]
         return cls((*values, *additional))
 
@@ -146,9 +206,7 @@ class ArtifactPolicy:
         acknowledged = source.get("QUALITYPROOF_ALLOW_UNREDACTABLE_ARTIFACTS") == "1"
         reasons = tuple(
             sorted(
-                name
-                for name, value in source.items()
-                if value and _ENV_SECRET_NAME.search(name)
+                name for name, value in source.items() if holds_credential(name, value)
             )
         )
         if source.get("QUALITYPROOF_STORAGE_STATE"):

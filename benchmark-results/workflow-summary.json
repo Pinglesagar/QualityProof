@@ -37,14 +37,14 @@
         "REQUIREMENT": 21,
         "UNATTRIBUTED": 6
       },
-      "benchmark_runtime_seconds": 0.03865,
-      "discovery_unknown_count": 2,
+      "benchmark_runtime_seconds": 0.068962,
+      "discovery_unknown_count": 4,
       "journeys_discovered": 8,
       "ledger_unknown_count": 1,
       "qualityproof_candidate_signals": [
         "execution_finding:checkout-total",
-        "execution_finding:journey-4a3ee525d17f",
-        "execution_finding:journey-c44b76cbcb5f",
+        "execution_finding:journey-45b88468bc87",
+        "execution_finding:journey-c98448123e49",
         "execution_finding:profile-validation",
         "page_state_changed:/admin",
         "page_state_changed:/products",
@@ -59,8 +59,8 @@
         "route_removed:/help"
       ],
       "qualityproof_false_positive_signals": [
-        "execution_finding:journey-4a3ee525d17f",
-        "execution_finding:journey-c44b76cbcb5f"
+        "execution_finding:journey-45b88468bc87",
+        "execution_finding:journey-c98448123e49"
       ],
       "qualityproof_matched_finding_ids": [
         "SEED-A11Y-001",
@@ -98,7 +98,7 @@
       "qualityproof_route_retargets": [
         "route_retargeted:/help->/missing-help"
       ],
-      "workflow_runtime_seconds": 62.355809
+      "workflow_runtime_seconds": 76.638522
     },
     "schema_version": "qualityproof-demo-benchmark/v2",
     "scope_notice": "Scores cover only this controlled fixture. No third-party tool was run and no third-party or general-accuracy comparison is claimed."
@@ -106,7 +106,7 @@
   "commands_run": 16,
   "output": "/Users/propertyloop03/qualityproof/benchmark-results",
   "project": "/Users/propertyloop03/qualityproof/.qualityproof/demo-workflow",
-  "runtime_seconds": 62.395079,
+  "runtime_seconds": 76.708676,
   "schema_version": "qualityproof-demo-workflow/v1",
   "status": "passed"
 }
