@@ -56,11 +56,59 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2)"]
 
 FROM runtime AS control
+# Remove the build-time Python tooling. It carries the last two scan findings and
+# nothing at runtime uses it: the control image runs uvicorn from /app/.venv and
+# the job image runs python from the same venv.
+#
+# The findings survived upgrading the installed packages because the vulnerable
+# copies are not the installed ones -- virtualenv embeds a setuptools seed wheel
+# (CVE-2025-47273) and pip vendors msgpack via cachecontrol
+# (GHSA-6v7p-g79w-8964). Upgrading dist-packages cannot reach a wheel bundled
+# inside another package, so the code is removed instead.
+#
+# Deliberately done per final stage rather than in `runtime`: the browser-job
+# stage runs `uv sync` again and needs the tooling until it has.
+RUN rm -rf \
+        /usr/local/lib/python3.12/dist-packages/pip \
+        /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
+        /usr/local/lib/python3.12/dist-packages/virtualenv \
+        /usr/local/lib/python3.12/dist-packages/virtualenv-*.dist-info \
+        /usr/local/lib/python3.12/dist-packages/virtualenv.py \
+        /usr/local/lib/python3.12/dist-packages/python_discovery* \
+        /usr/local/lib/python3.12/dist-packages/distlib* \
+        /usr/local/lib/python3.12/dist-packages/filelock* \
+        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
+        /usr/local/bin/virtualenv \
+    && rm -rf /root/.cache /tmp/* /var/tmp/* || true
 USER pwuser
 CMD ["uvicorn", "qualityproof.api:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
 
 FROM runtime AS browser-job
 RUN uv sync --frozen && chown -R pwuser:pwuser /app
+# Remove the build-time Python tooling. It carries the last two scan findings and
+# nothing at runtime uses it: the control image runs uvicorn from /app/.venv and
+# the job image runs python from the same venv.
+#
+# The findings survived upgrading the installed packages because the vulnerable
+# copies are not the installed ones -- virtualenv embeds a setuptools seed wheel
+# (CVE-2025-47273) and pip vendors msgpack via cachecontrol
+# (GHSA-6v7p-g79w-8964). Upgrading dist-packages cannot reach a wheel bundled
+# inside another package, so the code is removed instead.
+#
+# Deliberately done per final stage rather than in `runtime`: the browser-job
+# stage runs `uv sync` again and needs the tooling until it has.
+RUN rm -rf \
+        /usr/local/lib/python3.12/dist-packages/pip \
+        /usr/local/lib/python3.12/dist-packages/pip-*.dist-info \
+        /usr/local/lib/python3.12/dist-packages/virtualenv \
+        /usr/local/lib/python3.12/dist-packages/virtualenv-*.dist-info \
+        /usr/local/lib/python3.12/dist-packages/virtualenv.py \
+        /usr/local/lib/python3.12/dist-packages/python_discovery* \
+        /usr/local/lib/python3.12/dist-packages/distlib* \
+        /usr/local/lib/python3.12/dist-packages/filelock* \
+        /usr/local/bin/pip /usr/local/bin/pip3 /usr/local/bin/pip3.12 \
+        /usr/local/bin/virtualenv \
+    && rm -rf /root/.cache /tmp/* /var/tmp/* || true
 USER pwuser
 HEALTHCHECK NONE
 CMD ["python", "-m", "scripts.run_azure_job"]
