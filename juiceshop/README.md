@@ -69,9 +69,19 @@ claims to prove it.
 ## The one open finding
 
 `JS-CAT-2` requires the catalogue to expose exactly one level-one heading. It exposes
-three, so assistive technology cannot identify the page. The finding was produced by the
-accessibility facet during role-scoped discovery, not by reading the application's code,
-and is recorded in [`docs/project/findings/JS-CAT-2-multiple-h1.json`](docs/project/findings/JS-CAT-2-multiple-h1.json).
+**none**: the highest-ranked heading in the document is an `h2` carrying the site brand in
+the toolbar, so no heading names the page. Recorded in
+[`docs/project/findings/JS-CAT-2-no-h1.json`](docs/project/findings/JS-CAT-2-no-h1.json).
+
+The first revision of that finding said the page rendered *three* level-one headings, and
+that was wrong — which is worth keeping visible, because the tool caused the error. The
+accessibility facet checked for a heading with `document.querySelector('h1')`, and on a
+first visit Juice Shop opens a welcome banner: a modal dialog containing two `h1` elements.
+So the check found a heading, reported no defect, and the headings it recorded as the
+page's belonged to a dialog rendered above it. A structural rule defeated by an unrelated
+overlay produces a false negative on exactly the pages most likely to be wrong. The
+detector now scopes document-outline checks to page content and records `modal_dialog_open`
+as context. Fixing it turned a wrong finding into a correct and more serious one.
 
 The verifying test is marked `xfail(strict=True)`, not skipped. That distinction is the
 point: a skip is silence, whereas a strict expected failure asserts the defect is still

@@ -145,10 +145,34 @@ A11Y_SCRIPT = """() => {
       findings.push('image_missing_alt:' + (e.getAttribute('src') || '').split('/').pop());
     }
   }
-  if (!document.querySelector('h1')) findings.push('missing_h1');
-  const landmarks = document.querySelectorAll('main,[role=main]').length;
+  // Document-outline checks are scoped to page content. A modal dialog's heading
+  // belongs to the dialog, not to the page underneath it, and querySelector('h1')
+  // could not tell the difference: on a first visit OWASP Juice Shop opens a
+  // welcome banner containing two h1 elements, so this check reported "h1 present"
+  // for a catalogue page that has none. A structural rule defeated by an unrelated
+  // overlay is a false negative on exactly the pages most likely to be wrong.
+  // Only the dialog's own subtree is excluded. Treating aria-hidden as an exclusion
+  // too was tried and is wrong: a framework marks the whole application root
+  // aria-hidden while a modal is open, so every structural check collapsed to
+  // "missing" and the finding set changed depending on whether a dismissible banner
+  // happened to be showing. Findings that depend on transient UI state are not
+  // evidence. The dialog subtree exclusion is stable across both states.
+  const DIALOG = '[role=dialog],[role=alertdialog],dialog[open]';
+  const inDialog = (e) => Boolean(e.closest(DIALOG));
+  const rendered = (e) => e.getClientRects().length > 0;
+  const pageHeadings = [...document.querySelectorAll('h1')].filter((e) => !inDialog(e));
+  if (pageHeadings.length === 0) findings.push('missing_h1');
+  if (pageHeadings.length > 1) findings.push('duplicate_h1:' + pageHeadings.length);
+  const landmarks = [...document.querySelectorAll('main,[role=main]')]
+    .filter((e) => !inDialog(e)).length;
   if (landmarks === 0) findings.push('missing_main_landmark');
   if (landmarks > 1) findings.push('duplicate_main_landmark');
+  // Recorded as context, not judged: the page was measured while a modal covered it.
+  // Requires the dialog to be rendered, because frameworks leave collapsed dialog
+  // containers in the DOM permanently and an unconditional check fires everywhere.
+  if ([...document.querySelectorAll(DIALOG)].some(rendered)) {
+    findings.push('modal_dialog_open');
+  }
   return findings;
 }"""
 

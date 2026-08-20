@@ -23,7 +23,7 @@ $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli genera
 Generated and validated 8 tests.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli test --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
-Run run-520ddbbff9394091a5e1f32c8f515036 passed; result: .qualityproof/runs/run-520ddbbff9394091a5e1f32c8f515036/result.json; evidence: 0.
+Run run-41d6051624be41099c367d6ac8314c24 passed; result: .qualityproof/runs/run-41d6051624be41099c367d6ac8314c24/result.json; evidence: 0.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli requirements import /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/demo/seeded-defects.json --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --scope demo-seed-manifest
 Registered 9 requirements in scope 'demo-seed-manifest': SEED-A11Y-001, SEED-AUTHZ-001, SEED-JOURNEY-001, SEED-LAYOUT-001, SEED-LINK-001 ...
@@ -50,7 +50,7 @@ $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli discov
 Discovered 18 pages and 16 actions; 4 blocked/unknown (shopper:frontier_exhausted; admin:frontier_exhausted).
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli test --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
-Run run-94d85994ae6648a48948fea644015eef failed; result: .qualityproof/runs/run-94d85994ae6648a48948fea644015eef/result.json; evidence: 0.
+Run run-d2f6fd63ed3945d3a51a327e55d37221 failed; result: .qualityproof/runs/run-d2f6fd63ed3945d3a51a327e55d37221/result.json; evidence: 0.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli snapshot create demo-v2 --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --application /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/application.json
 Wrote immutable snapshot /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/.qualityproof/snapshots/demo-v2.json

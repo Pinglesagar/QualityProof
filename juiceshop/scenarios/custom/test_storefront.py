@@ -411,11 +411,14 @@ def test_profile_inputs_are_programmatically_labelled(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "Open finding: the catalogue renders several level-one headings "
-        "('Welcome to OWASP Juice Shop!', 'https://owasp-juice.shop') alongside the "
-        "page heading, so assistive technology cannot identify the page. Marked "
-        "strict so that fixing the application fails this marker rather than "
-        "letting it rot into a false statement about what is broken."
+        "Open finding JS-CAT-2-no-h1: the catalogue presents no level-one heading "
+        "at all. The highest heading in the document is an h2 carrying the site "
+        "brand, so no heading names the page and a screen-reader user navigating by "
+        "heading level cannot identify where they are. Marked strict so that fixing "
+        "the application fails this marker rather than letting it rot into a false "
+        "statement about what is broken. An earlier revision of this reason claimed "
+        "the page rendered several level-one headings; it does not, and that claim "
+        "was itself the rot this marker exists to prevent."
     ),
 )
 @qualityproof(
@@ -432,11 +435,21 @@ def test_catalogue_presents_exactly_one_primary_heading(
     anonymous_page: Page, visit
 ) -> None:
     visit(anonymous_page, "/search")
+    # Web-first wait on rendered content before taking a structural measurement.
+    # evaluate() is a snapshot, so measuring an unsettled page is a real flake:
+    # it would report zero headings while the view was still mounting and pass or
+    # fail on timing rather than on the application.
+    expect(anonymous_page.locator("mat-card").first).to_be_visible()
 
-    headings = [
-        heading.strip()
-        for heading in anonymous_page.locator("h1").all_inner_texts()
-        if heading.strip()
-    ]
+    # Scoped to page content, excluding dialog subtrees, for the same reason the
+    # accessibility facet is: a modal's heading belongs to the modal, not to the
+    # page underneath it. Measuring unscoped is what produced the earlier wrong
+    # finding, because the first-visit welcome banner contributes two h1 elements.
+    headings = anonymous_page.evaluate(
+        """() => [...document.querySelectorAll('h1')]
+             .filter((e) => !e.closest('[role=dialog],[role=alertdialog],dialog[open]'))
+             .map((e) => (e.innerText || '').trim())
+             .filter((text) => text.length > 0)"""
+    )
 
     assert len(headings) == 1, f"expected one level-one heading, found {headings}"

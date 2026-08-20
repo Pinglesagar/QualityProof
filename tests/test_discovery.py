@@ -204,3 +204,100 @@ async def test_authentication_secrets_are_absent_from_trace(
     serialized = result.model_dump_json()
     assert username not in serialized
     assert password not in serialized
+
+
+# A page whose only h1 elements sit inside a modal dialog, exactly the shape that
+# defeated the missing-h1 check on a real application. The dialog also marks the app
+# root aria-hidden, which is what a framework does while a modal is open.
+_DIALOG_MASKED_PAGE = """<!doctype html>
+<html><body>
+  <div id="app" aria-hidden="true">
+    <main><h2>Store brand</h2><p>Catalogue content</p></main>
+  </div>
+  <div role="dialog" aria-modal="true">
+    <h1>Welcome to the shop!</h1>
+    <h1>https://example.test</h1>
+    <button aria-label="Dismiss">x</button>
+  </div>
+</body></html>"""
+
+_PAGE_WITH_TWO_HEADINGS = """<!doctype html>
+<html><body><main><h1>First</h1><h1>Second</h1></main></body></html>"""
+
+_WELL_FORMED_PAGE = """<!doctype html>
+<html><body><main><h1>Catalogue</h1></main></body></html>"""
+
+
+async def _a11y_findings(html: str) -> set[str]:
+    from playwright.async_api import async_playwright
+
+    from qualityproof.discovery import A11Y_SCRIPT
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch()
+        try:
+            page = await browser.new_page()
+            await page.set_content(html)
+            return set(await page.evaluate(A11Y_SCRIPT))
+        finally:
+            await browser.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.browser
+async def test_dialog_headings_do_not_mask_a_page_without_any_heading() -> None:
+    """A modal's h1 belongs to the modal, not to the page underneath it.
+
+    The check was ``document.querySelector('h1')``, which cannot tell the two
+    apart. On a first visit OWASP Juice Shop opens a welcome banner containing two
+    h1 elements, so the detector reported no defect for a catalogue page that has
+    no heading at all -- a false negative on precisely the pages most likely to be
+    wrong. It also recorded the dialog's headings as the page's, which produced a
+    published finding stating the opposite of the truth.
+    """
+    try:
+        findings = await _a11y_findings(_DIALOG_MASKED_PAGE)
+    except PlaywrightError as error:
+        if "Executable doesn't exist" in str(error):
+            pytest.skip("Playwright Chromium is not installed")
+        raise
+    assert "missing_h1" in findings
+    # Context, so a reader knows the page was measured underneath a dialog.
+    assert "modal_dialog_open" in findings
+    # aria-hidden must not be treated as an exclusion: a framework marks the whole
+    # application root aria-hidden while a modal is open, and excluding it made
+    # every structural finding depend on whether a dismissible banner was showing.
+    assert "missing_main_landmark" not in findings
+
+
+@pytest.mark.asyncio
+@pytest.mark.browser
+async def test_more_than_one_page_heading_is_reported() -> None:
+    """The duplicate case is a real defect and previously had no rule at all."""
+    try:
+        findings = await _a11y_findings(_PAGE_WITH_TWO_HEADINGS)
+    except PlaywrightError as error:
+        if "Executable doesn't exist" in str(error):
+            pytest.skip("Playwright Chromium is not installed")
+        raise
+    assert "duplicate_h1:2" in findings
+    assert "missing_h1" not in findings
+    assert "modal_dialog_open" not in findings
+
+
+@pytest.mark.asyncio
+@pytest.mark.browser
+async def test_a_well_formed_page_reports_no_structural_finding() -> None:
+    """Guard against the fix over-reporting: one heading, one landmark, no dialog."""
+    try:
+        findings = await _a11y_findings(_WELL_FORMED_PAGE)
+    except PlaywrightError as error:
+        if "Executable doesn't exist" in str(error):
+            pytest.skip("Playwright Chromium is not installed")
+        raise
+    structural = {
+        finding
+        for finding in findings
+        if finding.startswith(("missing_", "duplicate_", "modal_"))
+    }
+    assert structural == set()

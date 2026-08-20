@@ -23,7 +23,7 @@ qualityproof coverage --project <p> --require-priority P1 --fail-on-orphans
   client-side — so the evidence is that administrative content is not rendered, on
   that route, for that identity. Automated exploration cannot prove no path exists.
 - `JS-CAT-2` is an **open finding against the application**, recorded as a strict
-  expected failure: the catalogue renders several level-one headings, so assistive
+  expected failure: the catalogue presents no level-one heading, so assistive
   technology cannot identify the page. Strict means fixing the application fails
   the marker rather than letting it rot into a false statement.
 - `JS-BASKET-2` was **amended after the tool disproved it** — see the SRS revision
