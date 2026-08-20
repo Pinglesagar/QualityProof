@@ -1,0 +1,6 @@
+requirements:
+- id: REQ-LOGIN
+  title: Login page
+  description: A visitor can open the login page.
+  acceptance_criteria:
+  - The login heading is visible.

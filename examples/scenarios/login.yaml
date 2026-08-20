@@ -1,0 +1,19 @@
+# QualityProof scenario; schema 1.0
+assertions:
+- selector: h1
+  type: visible
+proposer: deterministic
+provenance:
+- captured_at: '2026-01-01T00:00:00Z'
+  kind: REQUIREMENT
+  source: examples/requirements.yaml
+  locator: requirement:REQ-LOGIN
+requirement_ids:
+- REQ-LOGIN
+schema_version: '1.0'
+status: approved
+steps:
+- type: navigate
+  url: https://example.test/login
+title: User opens login
+id: login

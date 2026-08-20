@@ -1,0 +1,20 @@
+# QualityProof scenario; schema 1.0
+assertions:
+- expected: Products · QualityProof Demo
+  type: title
+hypothesis_assertions: []
+id: browser-smoke
+proposer: deterministic
+provenance:
+- captured_at: '1970-01-01T00:00:00Z'
+  kind: HUMAN_APPROVED
+  source: examples/browser-smoke
+  approved_by: smoke-fixture-reviewer
+  approved_at: '2026-08-19T00:00:00Z'
+requirement_ids: []
+schema_version: '1.0'
+status: approved
+steps:
+- type: navigate
+  url: http://127.0.0.1:8765/products
+title: Generated browser smoke test

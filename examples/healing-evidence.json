@@ -1,0 +1,36 @@
+{
+  "failed": {
+    "test_path": "scenarios/custom/test_checkout.py",
+    "line": 24,
+    "old_locator": "page.get_by_text(\"Buy\")",
+    "role": "button",
+    "name": "Buy",
+    "context": [
+      "checkout"
+    ],
+    "semantics": {
+      "precondition": "A signed-in user has a valid basket",
+      "user_intent": "Submit the order",
+      "postcondition": "The order confirmation is visible"
+    },
+    "assertion": "The order confirmation is visible",
+    "evidence": {
+      "failure": "locator did not resolve"
+    }
+  },
+  "candidates": [
+    {
+      "locator": "page.get_by_role(\"button\", name=\"Buy now\")",
+      "role": "button",
+      "name": "Buy now",
+      "context": [
+        "checkout"
+      ],
+      "semantics": {
+        "precondition": "A signed-in user has a valid basket",
+        "user_intent": "Submit the order",
+        "postcondition": "The order confirmation is visible"
+      }
+    }
+  ]
+}

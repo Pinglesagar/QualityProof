@@ -1,0 +1,40 @@
+{
+  "schema_version": "qualityproof-external-run/v1",
+  "run_id": "ts-2026-02-02T09-30-00-000Z-1-of-2",
+  "framework": "playwright-typescript",
+  "started_at": "2026-02-02T09:30:00Z",
+  "finished_at": "2026-02-02T09:31:40Z",
+  "shard": "1/2",
+  "artifact_policy": "artifacts=off authenticated=true quarantined=false",
+  "redacted": true,
+  "tests": [
+    {
+      "id": "example/tests/cart.spec.ts::cart survives a reload",
+      "path": "example/tests/cart.spec.ts",
+      "name": "cart survives a reload",
+      "line": 14,
+      "framework": "playwright-typescript",
+      "status": "flaky",
+      "duration_ms": 2210,
+      "requirement_ids": ["CART-002"],
+      "assertions": [],
+      "provenance": [],
+      "attachments": [],
+      "quarantined_attachments": ["test-results/cart-retry1/trace.zip"]
+    },
+    {
+      "id": "example/tests/cart.spec.ts::untraceable helper check",
+      "path": "example/tests/cart.spec.ts",
+      "name": "untraceable helper check",
+      "line": 30,
+      "framework": "playwright-typescript",
+      "status": "pass",
+      "duration_ms": 88,
+      "requirement_ids": [],
+      "assertions": [],
+      "provenance": [],
+      "attachments": [],
+      "quarantined_attachments": []
+    }
+  ]
+}

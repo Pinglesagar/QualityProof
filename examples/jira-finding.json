@@ -1,0 +1,14 @@
+{
+  "title": "Checkout confirmation is missing",
+  "summary": "Submitting a valid order does not show its confirmation.",
+  "requirement_ids": [
+    "REQ-CHECKOUT-1"
+  ],
+  "scenario_id": "checkout",
+  "route": "/checkout",
+  "severity": "high",
+  "evidence": {
+    "observed": "Expected confirmation heading; page remained on checkout.",
+    "screenshot": ".qualityproof/runs/example/evidence/failure.png"
+  }
+}

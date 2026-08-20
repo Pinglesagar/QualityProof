@@ -1,0 +1,42 @@
+{
+  "schema_version": "qualityproof-benchmark-ground-truth/v1",
+  "scope": "controlled demo v1 to v2",
+  "expected_findings": [
+    {
+      "id": "SEED-LOCATOR-001",
+      "signal": "page_state_changed:/products/1"
+    },
+    {
+      "id": "SEED-A11Y-001",
+      "signal": "page_state_changed:/profile"
+    },
+    {
+      "id": "SEED-LINK-001",
+      "signal": "route_added:/missing-help"
+    },
+    {
+      "id": "SEED-AUTHZ-001",
+      "signal": "page_state_changed:/admin"
+    },
+    {
+      "id": "SEED-VALIDATION-001",
+      "signal": "execution_finding:profile-validation"
+    },
+    {
+      "id": "SEED-TOTAL-001",
+      "signal": "execution_finding:checkout-total"
+    },
+    {
+      "id": "SEED-LAYOUT-001",
+      "signal": "page_state_changed:/products"
+    },
+    {
+      "id": "SEED-JOURNEY-001",
+      "signal": "route_removed:/legacy-order"
+    },
+    {
+      "id": "SEED-SAFETY-001",
+      "signal": "unknown:destructive_action_guard"
+    }
+  ]
+}

@@ -1,0 +1,112 @@
+{
+  "benchmark": {
+    "fixture_integrity": {
+      "checks_failed": [],
+      "checks_passed": [
+        "SEED-A11Y-001",
+        "SEED-AUTHZ-001",
+        "SEED-JOURNEY-001",
+        "SEED-LAYOUT-001",
+        "SEED-LINK-001",
+        "SEED-LOCATOR-001",
+        "SEED-SAFETY-001",
+        "SEED-TOTAL-001",
+        "SEED-VALIDATION-001"
+      ],
+      "declared_seed_count": 9,
+      "notice": "Direct seeded-fixture checks validate benchmark setup only; they are not product detections or QualityProof findings."
+    },
+    "ground_truth": {
+      "expected_finding_count": 9,
+      "expected_finding_ids": [
+        "SEED-A11Y-001",
+        "SEED-AUTHZ-001",
+        "SEED-JOURNEY-001",
+        "SEED-LAYOUT-001",
+        "SEED-LINK-001",
+        "SEED-LOCATOR-001",
+        "SEED-SAFETY-001",
+        "SEED-TOTAL-001",
+        "SEED-VALIDATION-001"
+      ],
+      "source": "demo/benchmark-ground-truth.json"
+    },
+    "measurements": {
+      "assertions_by_provenance": {
+        "OBSERVATION": 32,
+        "REQUIREMENT": 21,
+        "UNATTRIBUTED": 6
+      },
+      "benchmark_runtime_seconds": 0.065736,
+      "discovery_unknown_count": 2,
+      "journeys_discovered": 8,
+      "ledger_unknown_count": 1,
+      "qualityproof_candidate_signals": [
+        "execution_finding:checkout-total",
+        "execution_finding:journey-4a3ee525d17f",
+        "execution_finding:journey-c44b76cbcb5f",
+        "execution_finding:profile-validation",
+        "page_state_changed:/admin",
+        "page_state_changed:/products",
+        "page_state_changed:/products/:int",
+        "page_state_changed:/profile",
+        "route_added:/missing-help",
+        "route_removed:/legacy-order",
+        "unknown:destructive_action_guard"
+      ],
+      "qualityproof_context_changes": [
+        "application_metadata_changed:demo_version",
+        "route_removed:/help"
+      ],
+      "qualityproof_false_positive_signals": [
+        "execution_finding:journey-4a3ee525d17f",
+        "execution_finding:journey-c44b76cbcb5f"
+      ],
+      "qualityproof_matched_finding_ids": [
+        "SEED-A11Y-001",
+        "SEED-AUTHZ-001",
+        "SEED-JOURNEY-001",
+        "SEED-LAYOUT-001",
+        "SEED-LINK-001",
+        "SEED-LOCATOR-001",
+        "SEED-SAFETY-001",
+        "SEED-TOTAL-001",
+        "SEED-VALIDATION-001"
+      ],
+      "qualityproof_missed_finding_ids": [],
+      "qualityproof_page_facet_changes": {
+        "/admin": [
+          "headings",
+          "status",
+          "title"
+        ],
+        "/products": [
+          "controls",
+          "layout"
+        ],
+        "/products/:int": [
+          "controls"
+        ],
+        "/profile": [
+          "accessibility",
+          "controls"
+        ]
+      },
+      "qualityproof_precision": 0.818182,
+      "qualityproof_recall": 1.0,
+      "qualityproof_rejected_for_wrong_cause": [],
+      "qualityproof_route_retargets": [
+        "route_retargeted:/help->/missing-help"
+      ],
+      "workflow_runtime_seconds": 74.539798
+    },
+    "schema_version": "qualityproof-demo-benchmark/v2",
+    "scope_notice": "Scores cover only this controlled fixture. No third-party tool was run and no third-party or general-accuracy comparison is claimed."
+  },
+  "commands_run": 16,
+  "output": "/Users/propertyloop03/qualityproof/benchmark-results",
+  "project": "/Users/propertyloop03/qualityproof/.qualityproof/demo-workflow",
+  "runtime_seconds": 74.606498,
+  "schema_version": "qualityproof-demo-workflow/v1",
+  "status": "passed"
+}

@@ -1,0 +1,89 @@
+{
+  "schema_version": "qualityproof-demo-seeds/v1",
+  "baseline": "v1",
+  "candidate": "v2",
+  "scope": "Controlled local demo only",
+  "seeds": [
+    {
+      "id": "SEED-LOCATOR-001",
+      "category": "changed_locator_same_semantics",
+      "route": "/products/1",
+      "v1": "#add-to-cart / [data-testid=add-product]",
+      "v2": "#basket-add / [data-testid=basket-product]",
+      "expected_signal": "locator contract changed while button role/name remains Add to cart",
+      "implemented": true
+    },
+    {
+      "id": "SEED-A11Y-001",
+      "category": "missing_accessible_label",
+      "route": "/profile",
+      "v1": "phone input has an explicit label",
+      "v2": "phone input has no associated label",
+      "expected_signal": "authenticated accessibility assertion fails",
+      "implemented": true
+    },
+    {
+      "id": "SEED-LINK-001",
+      "category": "broken_link",
+      "route": "/missing-help",
+      "v1": "footer links to /help",
+      "v2": "footer links to an unhandled route",
+      "expected_signal": "HTTP 404 from a discovered internal link",
+      "implemented": true
+    },
+    {
+      "id": "SEED-AUTHZ-001",
+      "category": "permission_regression",
+      "route": "/admin",
+      "v1": "normal role receives HTTP 403",
+      "v2": "normal role receives HTTP 200",
+      "expected_signal": "normal user can see the admin dashboard",
+      "implemented": true
+    },
+    {
+      "id": "SEED-VALIDATION-001",
+      "category": "validation_regression",
+      "route": "/profile",
+      "v1": "malformed contact email is rejected",
+      "v2": "malformed contact email is saved",
+      "expected_signal": "invalid profile input is accepted",
+      "implemented": true
+    },
+    {
+      "id": "SEED-TOTAL-001",
+      "category": "total_calculation_defect",
+      "route": "/checkout",
+      "v1": "subtotal multiplies price by quantity",
+      "v2": "subtotal charges one unit per distinct product",
+      "expected_signal": "two mugs total £28.00 in v1 and £15.50 in v2",
+      "implemented": true
+    },
+    {
+      "id": "SEED-LAYOUT-001",
+      "category": "layout_overflow_marker",
+      "route": "/products",
+      "v1": "responsive grid has no fixed-width marker",
+      "v2": "data-seed-defect=layout-overflow has width 1200px",
+      "expected_signal": "marker exceeds a narrow viewport",
+      "implemented": true
+    },
+    {
+      "id": "SEED-JOURNEY-001",
+      "category": "removed_journey",
+      "route": "/legacy-order",
+      "v1": "catalogue links to legacy quick order",
+      "v2": "link and route are absent",
+      "expected_signal": "route removed from discovery snapshot",
+      "implemented": true
+    },
+    {
+      "id": "SEED-SAFETY-001",
+      "category": "intentional_destructive_action",
+      "route": "/danger/delete-account",
+      "v1": "checkout exposes a Delete account link",
+      "v2": "checkout exposes a Delete account link",
+      "expected_signal": "discovery records destructive_action_guard and never requests route",
+      "implemented": true
+    }
+  ]
+}

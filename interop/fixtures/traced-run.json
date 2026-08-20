@@ -1,0 +1,39 @@
+{
+  "schema_version": "qualityproof-external-run/v1",
+  "run_id": "ts-2026-01-01T00-00-00-000Z",
+  "framework": "playwright-typescript",
+  "started_at": "2026-01-01T00:00:00Z",
+  "finished_at": "2026-01-01T00:00:12Z",
+  "shard": null,
+  "artifact_policy": "artifacts=on_failure authenticated=false quarantined=false",
+  "redacted": true,
+  "tests": [
+    {
+      "id": "example/tests/checkout.spec.ts::catalogue lists products",
+      "path": "example/tests/checkout.spec.ts",
+      "name": "catalogue lists products",
+      "line": 8,
+      "framework": "playwright-typescript",
+      "status": "pass",
+      "duration_ms": 431,
+      "requirement_ids": ["CHECKOUT-014"],
+      "assertions": [
+        {
+          "kind": "expect",
+          "line": 11,
+          "expression": "expect(page.getByRole(\"heading\", { name: \"Products\" })).toBeVisible()"
+        }
+      ],
+      "provenance": [
+        {
+          "kind": "REQUIREMENT",
+          "source": "examples/requirements.yaml",
+          "locator": "requirement:CHECKOUT-014",
+          "captured_at": "1970-01-01T00:00:00Z"
+        }
+      ],
+      "attachments": [],
+      "quarantined_attachments": []
+    }
+  ]
+}

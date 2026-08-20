@@ -1,0 +1,16 @@
+requirements:
+- id: REQ-DEMO-CATALOGUE
+  title: Browse the seeded catalogue
+  description: A visitor can browse deterministic product pages.
+  acceptance_criteria:
+  - Product names and prices are visible.
+- id: REQ-DEMO-CHECKOUT
+  title: Calculate checkout totals
+  description: An authenticated shopper sees quantity-aware subtotal, shipping, and total values.
+  acceptance_criteria:
+  - Two £12.50 mugs plus £3.00 shipping total £28.00.
+- id: REQ-DEMO-SAFETY
+  title: Block destructive discovery
+  description: Discovery records but never activates the Delete account action.
+  acceptance_criteria:
+  - The destructive action appears as a blocked unknown.
