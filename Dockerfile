@@ -23,7 +23,19 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python -m pip install --no-cache-dir "uv==${UV_VERSION}"
+# Runs before `uv sync`, deliberately. ENV PATH puts /app/.venv/bin first, and a
+# uv-created virtual environment ships no pip, so once the venv exists
+# `python -m pip` resolves to an interpreter that cannot satisfy it.
+#
+# setuptools and msgpack are upgraded here rather than because the application
+# needs them: they arrive with the base image and its build tooling, and the image
+# scan reported both as HIGH with fixes available -- setuptools CVE-2025-47273
+# (path traversal) and msgpack GHSA-6v7p-g79w-8964 (out-of-bounds read). Neither
+# is in uv.lock.
+RUN python -m pip install --no-cache-dir \
+        "uv==${UV_VERSION}" \
+        "setuptools>=78.1.1" \
+        "msgpack>=1.2.1"
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
 COPY demo ./demo
@@ -32,20 +44,12 @@ COPY examples ./examples
 COPY tests ./tests
 RUN uv sync --frozen --no-dev && chown -R pwuser:pwuser /app
 
-# Two HIGH findings came from outside the application's own dependency tree:
-# setuptools (CVE-2025-47273, path traversal) and msgpack
-# (GHSA-6v7p-g79w-8964, out-of-bounds read) ship in the base image's Python and
-# in the seed-wheel and download caches left behind by the build. Both are fixed
-# upstream, so both are upgraded.
-#
-# The caches are then removed. They are build inputs, not runtime files: shipping
-# them enlarges the image and, more to the point, means a vulnerable wheel sitting
-# in a cache is part of the artifact we publish even though nothing imports it.
-RUN python -m pip install --no-cache-dir --upgrade \
-        "setuptools>=78.1.1" \
-        "msgpack>=1.2.1" \
-    && rm -rf /root/.cache/uv /root/.cache/virtualenv /root/.cache/pip \
-        /tmp/* /var/tmp/*
+# Build caches are inputs, not runtime files. Shipping them enlarges the image
+# and, more to the point, leaves vulnerable wheels inside the published artifact
+# even though nothing imports them -- which is exactly how the scan found a
+# vulnerable setuptools that no lockfile mentions.
+RUN rm -rf /root/.cache/uv /root/.cache/virtualenv /root/.cache/pip \
+    && rm -rf /tmp/* /var/tmp/* || true
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
