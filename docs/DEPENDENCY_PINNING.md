@@ -19,10 +19,24 @@ process should keep these references current.
 ## Base image patching
 
 The runtime stage applies `apt-get upgrade` over the pinned Playwright base
-image. That is deliberate and it is not in tension with pinning: the digest pin
-fixes *which* base image is used so builds are reproducible, while the patch layer
-resolves fixable OS-package CVEs that accumulate in that image between upstream
-releases.
+image. That is not in tension with pinning: the digest pin fixes *which* base
+image is used so builds are reproducible, while the patch layer resolves fixable
+OS-package CVEs that accumulate in that image between upstream releases.
+
+**A correction worth keeping.** This layer was originally added in response to a
+failing image scan, on the assumption that the scan had found OS-package
+vulnerabilities. It had not. The scan never ran: Trivy's installer resolves its
+release tag through the GitHub API, that request was unauthenticated and rate
+limited, and the step failed before any image was examined. An installer failure
+and a vulnerability finding are indistinguishable when the log is unreadable, and
+the inference was made without evidence.
+
+The patch layer is retained because patching a base image is sound hygiene on its
+own merits — but it was not a fix for the problem it was committed as. Two lessons
+are encoded in the workflow as a result: Trivy steps pass a token and pin a
+version so the installer cannot fail this way, and the scan reports its findings
+to the run summary before the gate enforces them, so a failure is legible without
+repository access.
 
 The image scan gates on CRITICAL and HIGH with `ignore-unfixed: true`, so every
 finding it reports is one a patch can resolve. When the scan fails, the fix is to
