@@ -199,13 +199,42 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
             echo "----- ${image} -----"
             cat "trivy-${image}.txt"
+            # The table view aggregates language findings under a target named
+            # "Python" with no path, which is not enough to act on: an upgrade can
+            # succeed while a vendored or embedded copy of the same package keeps
+            # the finding alive somewhere else in the image. The JSON carries
+            # PkgPath, so print exactly where each finding lives.
+            trivy image --scanners vuln --ignore-unfixed \
+              --severity CRITICAL,HIGH --format json \
+              --output "trivy-${image}.json" --exit-code 0 "${image}:test"
+            python3 - "$image" <<'PYEOF'
+          import json, sys
+          image = sys.argv[1]
+          report = json.load(open(f"trivy-{image}.json"))
+          rows = []
+          for result in report.get("Results") or []:
+              for finding in result.get("Vulnerabilities") or []:
+                  rows.append((
+                      finding.get("PkgName"),
+                      finding.get("InstalledVersion"),
+                      finding.get("FixedVersion"),
+                      finding.get("PkgPath") or result.get("Target"),
+                      finding.get("VulnerabilityID"),
+                  ))
+          print(f"=== {image}: {len(rows)} finding(s) with exact paths ===")
+          for name, installed, fixed, path, cve in sorted(rows):
+              print(f"  {name} {installed} -> {fixed}  [{cve}]")
+              print(f"      PkgPath: {path}")
+          PYEOF
           done
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
           name: qualityproof-image-scans-${{ github.sha }}
-          path: trivy-*.txt
+          path: |
+            trivy-*.txt
+            trivy-*.json
           if-no-files-found: warn
           retention-days: 14
 
