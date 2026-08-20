@@ -15,3 +15,17 @@ digest from an unauthenticated third-party source.
 Action updates must resolve the intended upstream release tag in the action's own Git repository
 and pin the resulting immutable 40-character commit. Dependabot or an equivalent reviewed update
 process should keep these references current.
+
+## Base image patching
+
+The runtime stage applies `apt-get upgrade` over the pinned Playwright base
+image. That is deliberate and it is not in tension with pinning: the digest pin
+fixes *which* base image is used so builds are reproducible, while the patch layer
+resolves fixable OS-package CVEs that accumulate in that image between upstream
+releases.
+
+The image scan gates on CRITICAL and HIGH with `ignore-unfixed: true`, so every
+finding it reports is one a patch can resolve. When the scan fails, the fix is to
+patch or to move the pin forward — never to widen the severity filter. A clean
+scan we did not earn is worse than a red build, because it is a false statement
+about the artifact we ship.

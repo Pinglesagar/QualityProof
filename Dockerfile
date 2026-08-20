@@ -12,6 +12,17 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Patch the base image's OS packages. The upstream Playwright image is a full
+# Ubuntu userland and accumulates fixable CVEs between releases; the image scan
+# gates on CRITICAL and HIGH with unfixed findings already excluded, so anything
+# it reports is something a patch layer can actually resolve. Applying the patch
+# is the correct response -- loosening the gate to go green would be reporting a
+# clean scan we had not earned.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN python -m pip install --no-cache-dir "uv==${UV_VERSION}"
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY src ./src
