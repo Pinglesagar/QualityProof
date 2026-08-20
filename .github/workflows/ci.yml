@@ -165,14 +165,14 @@ jobs:
         # findings are written to the run summary and uploaded as an artifact
         # first, and the gate runs afterwards against the same image.
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        env:
-          # The installer resolves the release tag through the GitHub API. Without
-          # a token that request is unauthenticated and rate limited, and the step
-          # fails before any image is scanned -- which is what happened here, and
-          # is indistinguishable from a vulnerability finding unless the log is
-          # readable.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # The installer resolves its release tag through the GitHub API. That
+          # request is rate limited when unauthenticated, and the step then fails
+          # before any image is scanned -- indistinguishable from a vulnerability
+          # finding unless the log is readable. The action exposes this input for
+          # the purpose; setting GITHUB_TOKEN in the step environment did not
+          # reach the installer.
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
           image-ref: qualityproof-control:test
           format: table
           output: trivy-control.txt
@@ -193,9 +193,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Enforce the image scan gate
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
           image-ref: qualityproof-control:test
           format: table
           exit-code: "1"
@@ -205,9 +204,8 @@ jobs:
           cache: true
       - name: Scan browser-job image
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
           image-ref: qualityproof-job:test
           format: table
           output: trivy-job.txt
@@ -235,9 +233,8 @@ jobs:
           retention-days: 14
       - name: Enforce the browser-job scan gate
         uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          github-pat: ${{ secrets.GITHUB_TOKEN }}
           image-ref: qualityproof-job:test
           format: table
           exit-code: "1"
