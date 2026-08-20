@@ -39,3 +39,6 @@ interop/schemas/
 # Session credentials captured by --save-storage-state. Never commit these.
 **/.qualityproof/auth/
 *storage-state*.json
+
+# Juice Shop target-app working project (runtime data and sessions)
+.qualityproof/juiceshop/
