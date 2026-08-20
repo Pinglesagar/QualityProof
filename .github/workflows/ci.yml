@@ -159,71 +159,48 @@ jobs:
           docker build --target control --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t qualityproof-control:test .
           docker build --target browser-job --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t qualityproof-job:test .
           docker run --rm qualityproof-job:test python -m scripts.image_smoke --launch-browser
-      - name: Scan image and publish the findings
+      - name: Install Trivy from a pinned release asset
+        # Deliberately not using the scanner's setup action. Its installer resolves
+        # a release tag through the GitHub API, and that lookup failed here twice --
+        # once unauthenticated, once with a token supplied two different ways --
+        # producing a step failure indistinguishable from a vulnerability finding.
+        # A pinned asset download has no API lookup, no third-party installer, and
+        # its errors surface in this job's own log.
+        env:
+          TRIVY_VERSION: 0.64.1
+        run: |
+          set -euo pipefail
+          archive="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          base="https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}"
+          curl -fsSL --retry 3 --retry-delay 5 -o "$archive" "$base/$archive"
+          curl -fsSL --retry 3 --retry-delay 5 -o checksums.txt \
+            "$base/trivy_${TRIVY_VERSION}_checksums.txt"
+          grep " $archive\$" checksums.txt | sha256sum -c -
+          tar -xzf "$archive" trivy
+          sudo install -m 0755 trivy /usr/local/bin/trivy
+          trivy --version
+
+      - name: Scan the images and publish the findings
         # Reported before it is enforced. A scan that only fails is a scan nobody
-        # can act on: the log is not readable without repository access, so the
-        # findings are written to the run summary and uploaded as an artifact
-        # first, and the gate runs afterwards against the same image.
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        with:
-          # The installer resolves its release tag through the GitHub API. That
-          # request is rate limited when unauthenticated, and the step then fails
-          # before any image is scanned -- indistinguishable from a vulnerability
-          # finding unless the log is readable. The action exposes this input for
-          # the purpose; setting GITHUB_TOKEN in the step environment did not
-          # reach the installer.
-          github-pat: ${{ secrets.GITHUB_TOKEN }}
-          image-ref: qualityproof-control:test
-          format: table
-          output: trivy-control.txt
-          exit-code: "0"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-          version: v0.64.1
-          cache: true
-      - name: Publish scan findings to the run summary
-        if: always()
+        # can act on: the job log needs repository access to read, so findings go
+        # to the run summary and an artifact first.
         run: |
-          {
-            echo "## Image scan: qualityproof-control"
-            echo
-            echo '```'
-            cat trivy-control.txt || echo "(no report produced)"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Enforce the image scan gate
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        with:
-          github-pat: ${{ secrets.GITHUB_TOKEN }}
-          image-ref: qualityproof-control:test
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-          version: v0.64.1
-          cache: true
-      - name: Scan browser-job image
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        with:
-          github-pat: ${{ secrets.GITHUB_TOKEN }}
-          image-ref: qualityproof-job:test
-          format: table
-          output: trivy-job.txt
-          exit-code: "0"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-          version: v0.64.1
-          cache: true
-      - name: Publish browser-job scan findings
-        if: always()
-        run: |
-          {
-            echo "## Image scan: qualityproof-job"
-            echo
-            echo '```'
-            cat trivy-job.txt || echo "(no report produced)"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          set -euo pipefail
+          for image in qualityproof-control qualityproof-job; do
+            trivy image --scanners vuln --ignore-unfixed \
+              --severity CRITICAL,HIGH --format table \
+              --output "trivy-${image}.txt" --exit-code 0 "${image}:test"
+            {
+              echo "## Image scan: ${image}"
+              echo
+              echo '```'
+              cat "trivy-${image}.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "----- ${image} -----"
+            cat "trivy-${image}.txt"
+          done
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
@@ -231,17 +208,14 @@ jobs:
           path: trivy-*.txt
           if-no-files-found: warn
           retention-days: 14
-      - name: Enforce the browser-job scan gate
-        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
-        with:
-          github-pat: ${{ secrets.GITHUB_TOKEN }}
-          image-ref: qualityproof-job:test
-          format: table
-          exit-code: "1"
-          ignore-unfixed: true
-          severity: CRITICAL,HIGH
-          version: v0.64.1
-          cache: true
+
+      - name: Enforce the image scan gate
+        run: |
+          set -euo pipefail
+          for image in qualityproof-control qualityproof-job; do
+            trivy image --scanners vuln --ignore-unfixed \
+              --severity CRITICAL,HIGH --exit-code 1 "${image}:test"
+          done
 
   mutation:
     name: Mutation score (nightly)
