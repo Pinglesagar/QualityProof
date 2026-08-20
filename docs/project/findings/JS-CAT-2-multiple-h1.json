@@ -1,0 +1,22 @@
+{
+  "title": "Catalogue renders multiple level-one headings",
+  "summary": "The product catalogue at /#/search exposes three level-one headings ('Welcome to OWASP Juice Shop!', 'https://owasp-juice.shop', and the page heading) instead of one. Assistive technology cannot determine which heading names the page, so a screen-reader user has no reliable way to identify where they are. Detected by automated accessibility measurement during multi-role discovery, and confirmed by a requirement-traced test that is recorded as a strict expected failure so that fixing the application will surface here rather than silently passing.",
+  "requirement_ids": ["JS-CAT-2"],
+  "route": "/#/search",
+  "severity": "medium",
+  "evidence": {
+    "requirement": "JS-CAT-2 - The catalogue page shall expose exactly one level-one heading naming the page",
+    "specification": "docs/project/SRS.md",
+    "observed_heading_count": 3,
+    "observed_headings": [
+      "Welcome to OWASP Juice Shop!",
+      "https://owasp-juice.shop"
+    ],
+    "expected_heading_count": 1,
+    "detected_by": "accessibility facet during role-scoped discovery",
+    "verifying_test": "juiceshop/tests/test_storefront.py::test_catalogue_presents_exactly_one_primary_heading",
+    "test_status": "xfail(strict=True) - tracked open finding, not a silenced failure",
+    "system_under_test": "OWASP Juice Shop v20.2.0, locally hosted",
+    "authorisation": "docs/project/AUTHORISATION.md"
+  }
+}

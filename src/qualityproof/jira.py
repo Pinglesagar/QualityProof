@@ -245,15 +245,21 @@ def sync_finding(
     repository: SQLiteRepository,
     *,
     dry_run: bool = True,
+    issue_type: str = "Bug",
 ) -> JiraIssueResult:
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", project_key):
         raise ValueError("project_key must be a Jira project identifier")
+    # Configurable because issue types are per-project. "Bug" is absent from plenty
+    # of Jira projects, and hardcoding it turns a working configuration into an
+    # opaque 400 at write time.
+    if not issue_type.strip():
+        raise ValueError("issue_type must not be empty")
     fingerprint = finding_fingerprint(finding)
     fields: dict[str, object] = {
         "project": {"key": project_key},
         "summary": finding.title,
         "description": adf_description(finding, fingerprint),
-        "issuetype": {"name": "Bug"},
+        "issuetype": {"name": issue_type.strip()},
         "labels": ["qualityproof", f"qp-{fingerprint[:12]}"],
     }
     mapping_id = hashlib.sha256(

@@ -812,6 +812,16 @@ def jira_sync(
         str | None,
         typer.Option(help="Jira API base, e.g. api.atlassian.com/ex/jira/<cloud-id>."),
     ] = None,
+    issue_type: Annotated[
+        str,
+        typer.Option(
+            "--issue-type",
+            help=(
+                "Issue type to create. Types are per-project, so confirm it exists "
+                "under Project settings -> Issue types."
+            ),
+        ),
+    ] = "Bug",
     apply: Annotated[bool, typer.Option("--apply", help="Perform the Jira write.")] = False,
 ) -> None:
     """Create/update one idempotent finding; prints a dry-run unless --apply."""
@@ -828,7 +838,9 @@ def jira_sync(
         port = JiraCloudAdapter(base_url)
     else:
         raise typer.BadParameter("adapter must be mock or cloud")
-    result = sync_finding(parsed, project_key, port, repository, dry_run=not apply)
+    result = sync_finding(
+        parsed, project_key, port, repository, dry_run=not apply, issue_type=issue_type
+    )
     typer.echo(result.model_dump_json(indent=2))
 
 
