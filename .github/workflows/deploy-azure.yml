@@ -1,0 +1,99 @@
+name: Deploy Azure
+
+on:
+  workflow_dispatch:
+    inputs:
+      enable_run_submission:
+        description: Enable authenticated queued runs
+        required: true
+        default: false
+        type: boolean
+      job_trigger:
+        description: Browser job trigger
+        required: true
+        default: Manual
+        type: choice
+        options:
+          - Manual
+          - Event
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: qualityproof-azure-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.DEPLOY_AZURE == 'true' &&
+      vars.AZURE_CLIENT_ID != '' &&
+      vars.AZURE_TENANT_ID != '' &&
+      vars.AZURE_SUBSCRIPTION_ID != '' &&
+      vars.AZURE_RESOURCE_GROUP != '' &&
+      vars.AZURE_PREFIX != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: azure-production
+    env:
+      RUN_SUBMISSION_ENABLED: ${{ inputs.enable_run_submission }}
+      JOB_TRIGGER: ${{ inputs.job_trigger }}
+      CONTROL_API_TOKEN: ${{ secrets.QUALITYPROOF_API_TOKEN }}
+      CONTROL_REPORT_TOKEN: ${{ secrets.QUALITYPROOF_REPORT_TOKEN }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Validate enabled submission secret
+        if: inputs.enable_run_submission
+        run: |
+          test "${#CONTROL_API_TOKEN}" -ge 32
+          test "${#CONTROL_REPORT_TOKEN}" -ge 32
+          test "${CONTROL_API_TOKEN}" != "${CONTROL_REPORT_TOKEN}"
+      - name: Sign in with federated identity
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5 # v2.3.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Bootstrap Azure resources
+        run: |
+          az deployment group create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "qualityproof-bootstrap-${GITHUB_RUN_ID}" \
+            --template-file infra/main.bicep \
+            --parameters prefix="${{ vars.AZURE_PREFIX }}" \
+                         deployWorkloads=false \
+                         imageTag="${GITHUB_SHA}" \
+                         runSubmissionEnabled="${RUN_SUBMISSION_ENABLED}" \
+                         jobTriggerType="${JOB_TRIGGER}" \
+                         controlApiToken="${CONTROL_API_TOKEN}" \
+                         controlReportToken="${CONTROL_REPORT_TOKEN}"
+      - name: Read deployment outputs
+        id: infra
+        run: |
+          LOGIN_SERVER="$(az deployment group show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "qualityproof-bootstrap-${GITHUB_RUN_ID}" --query properties.outputs.registryLoginServer.value -o tsv)"
+          REGISTRY_NAME="$(az deployment group show --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "qualityproof-bootstrap-${GITHUB_RUN_ID}" --query properties.outputs.registryName.value -o tsv)"
+          echo "login_server=${LOGIN_SERVER}" >> "$GITHUB_OUTPUT"
+          echo "registry_name=${REGISTRY_NAME}" >> "$GITHUB_OUTPUT"
+      - name: Build immutable images
+        run: |
+          az acr login --name "${{ steps.infra.outputs.registry_name }}"
+          docker build --target control --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t "${{ steps.infra.outputs.login_server }}/qualityproof-control:${GITHUB_SHA}" .
+          docker build --target browser-job --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t "${{ steps.infra.outputs.login_server }}/qualityproof-job:${GITHUB_SHA}" .
+          docker run --rm "${{ steps.infra.outputs.login_server }}/qualityproof-job:${GITHUB_SHA}" python -m scripts.image_smoke --launch-browser
+          docker push "${{ steps.infra.outputs.login_server }}/qualityproof-control:${GITHUB_SHA}"
+          docker push "${{ steps.infra.outputs.login_server }}/qualityproof-job:${GITHUB_SHA}"
+      - name: Deploy commit-SHA revision
+        run: |
+          az deployment group create \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --name "qualityproof-${GITHUB_RUN_ID}" \
+            --template-file infra/main.bicep \
+            --parameters prefix="${{ vars.AZURE_PREFIX }}" \
+                         deployWorkloads=true \
+                         imageTag="${GITHUB_SHA}" \
+                         runSubmissionEnabled="${RUN_SUBMISSION_ENABLED}" \
+                         jobTriggerType="${JOB_TRIGGER}" \
+                         controlApiToken="${CONTROL_API_TOKEN}" \
+                         controlReportToken="${CONTROL_REPORT_TOKEN}"

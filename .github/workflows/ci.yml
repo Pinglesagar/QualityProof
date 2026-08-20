@@ -1,0 +1,229 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    # Mutation testing is slow; it runs nightly rather than per pull request.
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+
+env:
+  UV_VERSION: "0.8.22"
+  # Set to the measured value, not an aspiration. Raise it when coverage rises;
+  # never lower it to make a red build green.
+  COVERAGE_FLOOR: "70"
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install uv
+        run: python -m pip install "uv==${UV_VERSION}"
+      - name: Synchronize locked dependencies
+        run: uv sync --frozen
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Strict mypy
+        run: uv run mypy
+      - name: Unit tests with branch coverage
+        run: >-
+          uv run pytest -m "not browser"
+          --cov=qualityproof --cov-branch
+          --cov-report=term-missing --cov-report=xml
+          --cov-fail-under=${{ env.COVERAGE_FLOOR }}
+      - name: Dependency audit
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt --output-file /tmp/requirements.txt
+          uvx --python 3.12 --from pip-audit==2.9.0 pip-audit --requirement /tmp/requirements.txt --no-deps --disable-pip
+
+  browser-and-workflow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install uv
+        run: python -m pip install "uv==${UV_VERSION}"
+      - name: Synchronize locked dependencies
+        run: uv sync --frozen
+      - name: Install Chromium and OS dependencies
+        run: uv run playwright install --with-deps chromium
+      - name: Browser runtime smoke without Docker
+        run: uv run python -m scripts.image_smoke --launch-browser
+      - name: Chromium integration tests
+        run: uv run pytest -m browser
+      - name: Generated-test smoke and complete demo workflow
+        run: uv run python -m scripts.run_demo_workflow
+      - name: Re-run benchmark independently
+        run: uv run python -m scripts.benchmark_demo
+      - name: Requirement coverage gate
+        # Orphan links are always a defect: a test claiming to cover a requirement
+        # the registry does not contain is untraceable by construction. The
+        # verified-share floor is set to the measured value, not an aspiration.
+        run: >-
+          uv run qualityproof coverage
+          --project .qualityproof/demo-workflow
+          --fail-on-orphans
+          --fail-under 0.70
+      - name: Upload evidence and benchmark
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: qualityproof-evidence-${{ github.sha }}
+          path: |
+            benchmark-results/
+            .qualityproof/demo-workflow/.qualityproof/reports/
+            .qualityproof/demo-workflow/.qualityproof/runs/
+            .qualityproof/demo-workflow/.qualityproof/reports/coverage.md
+            .qualityproof/demo-workflow/.qualityproof/snapshots/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
+
+  node-adapter:
+    name: TypeScript adapter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: packages/qualityproof-playwright/package-lock.json
+      - name: Install uv
+        run: python -m pip install "uv==${UV_VERSION}"
+      - name: Synchronize locked dependencies
+        run: uv sync --frozen
+      - name: Install Node dependencies
+        run: npm ci --prefix packages/qualityproof-playwright
+      - name: Node dependency audit
+        run: npm audit --audit-level=moderate --prefix packages/qualityproof-playwright
+      - name: Build adapter and regenerate interop types from the pydantic schemas
+        run: npm run build --prefix packages/qualityproof-playwright
+      - name: Fail if the generated interop types drifted from the schemas
+        run: |
+          if ! git diff --quiet -- packages/qualityproof-playwright/src/generated; then
+            echo "Generated interop types are stale; run: npm run schema"
+            git diff -- packages/qualityproof-playwright/src/generated
+            exit 1
+          fi
+      - name: Lint, enforcing the locator doctrine
+        run: npm run lint --prefix packages/qualityproof-playwright
+      - name: Adapter unit and contract tests
+        run: npm test --prefix packages/qualityproof-playwright
+      - name: Python half of the same interop contract
+        run: uv run pytest tests/test_interop_contract.py tests/test_dual_language_emission.py -q
+      - name: Install Chromium
+        run: npm exec --prefix packages/qualityproof-playwright -- playwright install --with-deps chromium
+      - name: Cross-language integration proof
+        run: uv run python -m scripts.run_interop_demo
+      - name: Assert TypeScript evidence reached the ledger under the same rules
+        run: uv run python -m scripts.assert_interop_ledger
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: qualityproof-interop-${{ github.sha }}
+          path: |
+            .qualityproof/interop-demo/.qualityproof/external/
+            packages/qualityproof-playwright/test-results/
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
+
+  container:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build production targets
+        run: |
+          docker build --target control --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t qualityproof-control:test .
+          docker build --target browser-job --build-arg QUALITYPROOF_REVISION="${GITHUB_SHA}" -t qualityproof-job:test .
+          docker run --rm qualityproof-job:test python -m scripts.image_smoke --launch-browser
+      - name: Scan image
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        with:
+          image-ref: qualityproof-control:test
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+      - name: Scan browser-job image
+        uses: aquasecurity/trivy-action@dc5a429b52fcf669ce959baa2c2dd26090d2a6c4 # v0.32.0
+        with:
+          image-ref: qualityproof-job:test
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  mutation:
+    name: Mutation score (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install uv
+        run: python -m pip install "uv==${UV_VERSION}"
+      - run: uv sync --frozen
+      - name: Mutate the trust rules and report survivors
+        run: uv run python -m scripts.mutation_report
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: qualityproof-mutation-${{ github.sha }}
+          path: benchmark-results/mutation.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  pages:
+    if: github.ref == 'refs/heads/main' && vars.PUBLISH_PAGES == 'true'
+    needs: browser-and-workflow
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: qualityproof-evidence-${{ github.sha }}
+          path: evidence
+      - name: Prepare static report
+        run: |
+          mkdir -p public
+          cp evidence/.qualityproof/demo-workflow/.qualityproof/reports/ledger.html public/index.html
+          cp evidence/.qualityproof/demo-workflow/.qualityproof/reports/ledger.json public/ledger.json
+          cp evidence/benchmark-results/benchmark.json public/benchmark.json
+          cp evidence/benchmark-results/benchmark.md public/benchmark.md
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

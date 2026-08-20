@@ -1,0 +1,11 @@
+# Replace OWNER with your GitHub username or team before pushing; GitHub silently
+# ignores a CODEOWNERS entry that names an account it cannot resolve.
+*       @OWNER
+
+# The trust rules and the interop contract decide what this project claims, so
+# changes here deserve a deliberate second look.
+/src/qualityproof/audit.py        @OWNER
+/src/qualityproof/security.py     @OWNER
+/src/qualityproof/models.py       @OWNER
+/interop/                         @OWNER
+/demo/benchmark-ground-truth.json @OWNER

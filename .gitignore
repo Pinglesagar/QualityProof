@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+
+.env
+.env.*
+!.env.example
+
+.qualityproof/
+qualityproof.toml
+*.db
+*.db-shm
+*.db-wal
+
+.DS_Store
+.idea/
+.vscode/
+
+# Node toolchain for the TypeScript adapter
+node_modules/
+packages/**/dist/
+packages/**/src/generated/
+packages/**/test-results/
+packages/**/playwright-report/
+packages/**/blob-report/
+packages/**/.playwright-cache/
+
+# Generated interop schemas are reproducible from the pydantic models
+interop/schemas/
+
+# Session credentials captured by --save-storage-state. Never commit these.
+**/.qualityproof/auth/
+*storage-state*.json

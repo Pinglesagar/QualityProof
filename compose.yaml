@@ -1,0 +1,57 @@
+name: qualityproof
+
+services:
+  control:
+    build:
+      context: .
+      target: control
+      args:
+        QUALITYPROOF_REVISION: local-compose
+    environment:
+      QUALITYPROOF_PROJECT_DIRECTORY: /data/project
+      QUALITYPROOF_BENCHMARK_DIRECTORY: /data/results
+      QUALITYPROOF_RUN_QUEUE_DIRECTORY: /data/queue
+      QUALITYPROOF_RUN_SUBMISSION_ENABLED: "false"
+    ports:
+      - "8000:8000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - qualityproof-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  demo:
+    build:
+      context: .
+      target: control
+      args:
+        QUALITYPROOF_REVISION: local-compose
+    command: ["python", "-m", "demo.app", "--version", "v1", "--host", "0.0.0.0", "--port", "8765"]
+    ports:
+      - "8765:8765"
+    read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/products', timeout=2)",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  qualityproof-data:
