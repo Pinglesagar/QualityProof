@@ -877,21 +877,15 @@ async def discover_application(
                     },
                     sort_keys=True,
                 )
-                # The identity of a page state excludes volatile facets so that a
-                # permission or layout regression is reported as the *same* route
-                # changing, not as one state vanishing and an unrelated one appearing.
-                identity = json.dumps(
-                    {
-                        "route": normalize_route(final_url),
-                        "title": title,
-                        "headings": headings,
-                        "forms": forms,
-                    },
-                    sort_keys=True,
-                )
-                state_id = _stable_id(
-                    "page", f"{policy.role_name}|{normalize_route(final_url)}{identity}"
-                )
+                # Identity is the observing role and the concrete URL, and nothing
+                # else. An earlier version folded title, headings and forms into it
+                # so a facet change would read as the same state changing -- but
+                # those *are* facets, so any content difference minted a new
+                # identity, and a release diff reported every page as one added and
+                # one removed rather than one changed. The URL rather than the
+                # route, because /products/1 and /products/2 normalize to a single
+                # route and must remain distinct states.
+                state_id = _stable_id("page", f"{policy.role_name}|{final_url}")
                 evidence_ids: list[str] = []
                 observations = [
                     (

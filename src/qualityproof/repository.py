@@ -22,6 +22,8 @@ class Repository(Protocol):
 
     def list(self, kind: str, model: type[ModelT]) -> tuple[ModelT, ...]: ...
 
+    def release_nested_scopes(self, scope: str, record_kind: str) -> tuple[str, ...]: ...
+
     def append_event(self, event: AuditEvent) -> None: ...
 
     def clear_kind(self, kind: str) -> None: ...
@@ -251,6 +253,51 @@ class SQLiteRepository:
                 ("materialization_manifest", manifest_id, manifest.model_dump_json()),
             )
         return manifest
+
+    def release_nested_scopes(self, scope: str, record_kind: str) -> tuple[str, ...]:
+        """Release scopes nested inside ``scope``, returning the names dropped.
+
+        Scopes are filesystem paths for source audits, and auditing a directory
+        legitimately supersedes an earlier audit of a file inside it. Without this
+        the cross-scope ownership check -- which exists to stop one scope silently
+        deleting another's records -- would refuse the wider audit instead, since
+        both scopes claim the same ledger ids.
+
+        Only strictly nested scopes are released. A sibling or unrelated scope is
+        left alone, so the protection that matters is intact.
+        """
+        if not scope or not record_kind:
+            raise ValueError("scope and record_kind must not be empty")
+        try:
+            root = Path(scope).resolve()
+        except OSError:
+            return ()
+        released: list[str] = []
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT record_id, payload FROM records WHERE kind = ?",
+                ("materialization_manifest",),
+            ).fetchall()
+            for record_id, payload in rows:
+                manifest = MaterializationManifest.model_validate_json(str(payload))
+                if manifest.record_kind != record_kind or manifest.scope == scope:
+                    continue
+                try:
+                    candidate = Path(manifest.scope).resolve()
+                except OSError:
+                    continue
+                if candidate == root or root not in candidate.parents:
+                    continue
+                connection.executemany(
+                    "DELETE FROM records WHERE kind = ? AND record_id = ?",
+                    ((record_kind, owned) for owned in manifest.record_ids),
+                )
+                connection.execute(
+                    "DELETE FROM records WHERE kind = ? AND record_id = ?",
+                    ("materialization_manifest", str(record_id)),
+                )
+                released.append(manifest.scope)
+        return tuple(sorted(released))
 
     def append_event(self, event: AuditEvent) -> None:
         """Append an immutable audit event; duplicate IDs are rejected."""

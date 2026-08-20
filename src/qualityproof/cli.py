@@ -165,11 +165,15 @@ def audit(
     except SyntaxError as error:
         typer.echo(f"Unable to parse {error.filename}:{error.lineno}: {error.msg}", err=True)
         raise typer.Exit(code=1) from error
+    # Auditing a directory supersedes any earlier audit of a path inside it.
+    released = repository.release_nested_scopes(str(path.resolve()), "ledger")
     repository.replace_manifested_set(
         str(path.resolve()),
         "ledger",
         ((entry.id, entry) for entry in ledger),
     )
+    if released:
+        typer.echo(f"Superseded {len(released)} narrower audit scope(s).")
     repository.append_event(
         AuditEvent(
             id=str(uuid4()),

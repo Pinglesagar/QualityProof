@@ -17,11 +17,19 @@ _SENSITIVE_KEY = re.compile(
 _BEARER = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]+", re.I)
 _BASIC = re.compile(r"\bBasic\s+[A-Za-z0-9+/=]+", re.I)
 _URL_CREDENTIAL = re.compile(r"(https?://)[^/@\s:]+(?::[^/@\s]*)?@", re.I)
+#: Matched on underscore or string boundaries rather than as a substring. The
+#: previous form looked for "PASSWORD" and therefore missed "JS_CUSTOMER_PASS" --
+#: a real credential in a conventional variable name went unredacted, which this
+#: project's own test suite caught. Boundary matching also avoids the reverse
+#: error: "TESTS_PASSED" is not a secret.
 _ENV_SECRET_NAME = re.compile(
-    r"(?:PASSWORD|SECRET|TOKEN|API_KEY|APIKEY|CREDENTIAL|AUTHORIZATION|COOKIE"
+    r"(?:^|_)(?:"
+    r"PASS|PASSWORD|PASSPHRASE|PWD|SECRET|TOKEN|KEY|APIKEY|CREDENTIAL|CREDENTIALS"
+    r"|AUTH|AUTHORIZATION|COOKIE|SESSION|BEARER"
     # A username is not a secret in the way a password is, but it identifies a
     # real account and appears in the same evidence, so it is redacted too.
-    r"|USERNAME|USER_EMAIL|LOGIN)",
+    r"|USER|USERNAME|EMAIL|LOGIN"
+    r")(?:_|$)",
     re.I,
 )
 #: Below this length a value is too generic to replace safely: substituting every

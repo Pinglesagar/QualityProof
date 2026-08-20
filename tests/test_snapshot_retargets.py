@@ -182,3 +182,59 @@ def test_facet_changes_are_not_conflated_across_roles() -> None:
     comparison = compare_snapshots(before, after)
 
     assert comparison.page_facet_changes == {"/admin": ("status",)}
+
+
+def test_a_role_reachability_change_between_releases_is_reported() -> None:
+    """A route becoming reachable for a role is the regression that matters.
+
+    A privilege boundary is only observable as a change: one release denies a
+    route to a customer, the next serves it. Reporting that is the whole purpose
+    of keeping snapshots immutable.
+    """
+    before = EvidenceSnapshot(
+        name="before",
+        routes=("/admin", "/shop"),
+        page_fingerprints={"/admin#admin-state": "a", "/shop#shop-state": "s"},
+        page_facets={
+            "/admin#admin-state": {"status": "denied", "headings": "none"},
+            "/shop#shop-state": {"status": "ok", "headings": "shop"},
+        },
+        page_roles={"/admin#admin-state": "customer", "/shop#shop-state": "customer"},
+    )
+    after = EvidenceSnapshot(
+        name="after",
+        routes=("/admin", "/shop"),
+        page_fingerprints={"/admin#admin-state": "b", "/shop#shop-state": "s"},
+        page_facets={
+            # The customer now receives administrative content at the same route.
+            "/admin#admin-state": {"status": "ok", "headings": "administration"},
+            "/shop#shop-state": {"status": "ok", "headings": "shop"},
+        },
+        page_roles={"/admin#admin-state": "customer", "/shop#shop-state": "customer"},
+    )
+
+    comparison = compare_snapshots(before, after)
+
+    assert comparison.page_facet_changes["/admin"] == ("headings", "status")
+    # The unchanged route must stay silent, or the signal is worthless.
+    assert "/shop" not in comparison.page_facet_changes
+
+
+def test_a_page_identity_is_stable_across_runs() -> None:
+    """Identity must not absorb content, or every diff reads as churn.
+
+    An earlier version folded title, headings and forms into the state id. Any
+    content difference therefore minted a new identity, and a release diff of ten
+    changed pages reported fifteen added and fifteen removed instead. Identity is
+    the observing role and the concrete URL; everything else is a facet.
+    """
+    from qualityproof.discovery import _stable_id
+
+    first = _stable_id("page", "customer|https://a.test/#/basket")
+    again = _stable_id("page", "customer|https://a.test/#/basket")
+    other_role = _stable_id("page", "admin|https://a.test/#/basket")
+    other_page = _stable_id("page", "customer|https://a.test/#/orders")
+
+    assert first == again
+    assert first != other_role, "the observing role is part of identity"
+    assert first != other_page, "two URLs under one route stay distinct states"

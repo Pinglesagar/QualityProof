@@ -11,6 +11,7 @@ rather than silently rotting into a lie about what is broken.
 
 from __future__ import annotations
 
+import pytest
 from playwright.sync_api import Page, expect
 
 from qualityproof import qualityproof
@@ -46,9 +47,13 @@ def test_catalogue_is_reachable_without_authentication(anonymous_page: Page, vis
     # "Contact" looked like a natural anchor but is a collapsed sidenav heading,
     # not a visible link -- asserting on it tested the navigation drawer, not the
     # requirement.
-    expect(anonymous_page.locator(".mat-mdc-card").first).to_be_visible()
     expect(anonymous_page.locator("#searchQuery")).to_be_attached()
-    assert anonymous_page.locator(".mat-mdc-card").count() > 1, "expected a product grid"
+    # `.nth(1)` asserts a *grid* rather than a single tile, and does so through a
+    # web-first assertion that retries. An earlier version used `count() > 1`,
+    # which is a snapshot: on a freshly restarted application only the first tile
+    # had rendered at that instant and the test failed. It passed in isolation
+    # every time, which is exactly how this class of flake hides.
+    expect(anonymous_page.locator(".mat-mdc-card").nth(1)).to_be_visible()
 
 
 @qualityproof(
@@ -292,3 +297,146 @@ def test_an_anonymous_visitor_is_denied_the_administration_surface(
     expect(
         anonymous_page.get_by_role("heading", name="Administration", level=1)
     ).to_have_count(0)
+
+
+@qualityproof(
+    requirements=["JS-AUTH-1"],
+    provenance=[
+        {
+            "kind": "REQUIREMENT",
+            "source": "docs/project/requirements.yaml",
+            "locator": "requirement:JS-AUTH-1",
+        }
+    ],
+)
+def test_a_registered_customer_holds_an_authenticated_session(
+    customer_page: Page, visit, account_identifiers: dict[str, str]
+) -> None:
+    """Evidence that the session is genuinely authenticated, not merely present.
+
+    A saved storage state proves a login once happened; it does not prove the
+    application still regards it as valid. The account menu naming the account is
+    the application's own statement that it does.
+    """
+    visit(customer_page, "/basket")
+
+    headings = customer_page.locator("h1").all_inner_texts()
+    expected = account_identifiers.get("customer")
+    assert expected, "no customer identity was captured by the auth setup"
+    assert any(expected in heading for heading in headings), headings
+
+
+@qualityproof(
+    requirements=["JS-CHECKOUT-1"],
+    provenance=[
+        {
+            "kind": "REQUIREMENT",
+            "source": "docs/project/requirements.yaml",
+            "locator": "requirement:JS-CHECKOUT-1",
+        }
+    ],
+)
+def test_checkout_is_reachable_from_the_basket(customer_page: Page, visit) -> None:
+    """Reachability only. No order is placed, and none can be from here.
+
+    The requirement is that checkout can be *initiated*; completing a purchase is
+    a state change against someone's application and is out of scope by BRS
+    section 5. The address-selection step is where checkout begins, so that is
+    where the evidence stops.
+    """
+    visit(customer_page, "/address/select")
+
+    expect(customer_page.get_by_role("heading", name="Select an address")).to_be_visible()
+
+
+@qualityproof(
+    requirements=["JS-PROFILE-1"],
+    provenance=[
+        {
+            "kind": "REQUIREMENT",
+            "source": "docs/project/requirements.yaml",
+            "locator": "requirement:JS-PROFILE-1",
+        }
+    ],
+)
+def test_a_customer_reaches_their_own_profile(
+    customer_page: Page, juiceshop_base_url: str
+) -> None:
+    """The profile is server-rendered, not a client-side route.
+
+    Worth stating: an application is rarely uniformly one thing. Assuming every
+    route in a single-page application is a fragment would have missed this page
+    entirely.
+    """
+    response = customer_page.goto(
+        f"{juiceshop_base_url}/profile", wait_until="domcontentloaded"
+    )
+
+    assert response is not None and response.status == 200
+    expect(customer_page.locator("#username")).to_be_attached()
+
+
+@qualityproof(
+    requirements=["JS-PROFILE-2"],
+    provenance=[
+        {
+            "kind": "REQUIREMENT",
+            "source": "docs/project/requirements.yaml",
+            "locator": "requirement:JS-PROFILE-2",
+        }
+    ],
+)
+def test_profile_inputs_are_programmatically_labelled(
+    customer_page: Page, juiceshop_base_url: str
+) -> None:
+    customer_page.goto(f"{juiceshop_base_url}/profile", wait_until="domcontentloaded")
+
+    unlabelled = customer_page.evaluate(
+        """() => Array.from(document.querySelectorAll('input'))
+             .filter((element) => {
+               const type = (element.getAttribute('type') || '').toLowerCase();
+               if (['hidden', 'submit', 'button', 'file'].includes(type)) return false;
+               if ((element.getAttribute('aria-label') || '').trim()) return false;
+               if ((element.getAttribute('aria-labelledby') || '').trim()) return false;
+               if (element.id &&
+                   document.querySelector('label[for="' + element.id + '"]')) return false;
+               return !element.closest('label');
+             })
+             .map((element) => element.getAttribute('name') || element.id || 'anonymous')"""
+    )
+
+    assert unlabelled == [], f"profile inputs without an accessible name: {unlabelled}"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "Open finding: the catalogue renders several level-one headings "
+        "('Welcome to OWASP Juice Shop!', 'https://owasp-juice.shop') alongside the "
+        "page heading, so assistive technology cannot identify the page. Marked "
+        "strict so that fixing the application fails this marker rather than "
+        "letting it rot into a false statement about what is broken."
+    ),
+)
+@qualityproof(
+    requirements=["JS-CAT-2"],
+    provenance=[
+        {
+            "kind": "REQUIREMENT",
+            "source": "docs/project/requirements.yaml",
+            "locator": "requirement:JS-CAT-2",
+        }
+    ],
+)
+def test_catalogue_presents_exactly_one_primary_heading(
+    anonymous_page: Page, visit
+) -> None:
+    visit(anonymous_page, "/search")
+
+    headings = [
+        heading.strip()
+        for heading in anonymous_page.locator("h1").all_inner_texts()
+        if heading.strip()
+    ]
+
+    assert len(headings) == 1, f"expected one level-one heading, found {headings}"

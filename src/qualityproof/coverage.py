@@ -85,16 +85,26 @@ class CoverageReport(DomainModel):
         """Share of registered requirements with at least one verified test."""
         return self.verified / self.total if self.total else 0.0
 
-    def unproven_at(self, priority: RequirementPriority) -> tuple[str, ...]:
+    def unproven_at(self, priority: RequirementPriority | str) -> tuple[str, ...]:
         """Requirements of a given priority that no test has established.
 
         This is the question a release review actually gates on: not the overall
         percentage, but whether anything critical is unproven.
+
+        A plain string is accepted and coerced. Comparing an enum member with
+        ``is`` against a string silently yields nothing, and a risk gate that
+        quietly reports no problems is worse than one that fails loudly, so an
+        unrecognised band raises instead.
         """
+        band = (
+            priority
+            if isinstance(priority, RequirementPriority)
+            else RequirementPriority(str(priority).strip().upper())
+        )
         return tuple(
             item.requirement_id
             for item in self.requirements
-            if item.priority is priority and item.status is not RequirementStatus.VERIFIED
+            if item.priority is band and item.status is not RequirementStatus.VERIFIED
         )
 
     def by_priority(self) -> dict[str, dict[str, int]]:

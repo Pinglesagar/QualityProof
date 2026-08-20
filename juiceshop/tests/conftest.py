@@ -13,6 +13,7 @@ another. One login, many contexts, no shared state.
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 from collections.abc import Iterator
@@ -142,10 +143,15 @@ def _dismiss_overlays(page: Page) -> None:
 
 @pytest.fixture(scope="session")
 def account_identifiers() -> dict[str, str]:
-    """The email each saved session belongs to, read from the session itself.
+    """The account each saved session belongs to, read from the session itself.
 
-    Read rather than hard-coded so the assertion cannot silently drift from the
-    account actually in use.
+    Derived rather than hard-coded, so the assertion cannot drift from the account
+    actually in use. The session stores a bearer token and no separate identity,
+    so the claim is read out of the token payload.
+
+    The signature is deliberately not verified: this is not authentication, it is
+    a test reading which account it is operating as. Verifying it would require
+    the application's key and would prove nothing the test needs.
     """
     identifiers: dict[str, str] = {}
     for role in ("customer", "admin"):
@@ -153,8 +159,38 @@ def account_identifiers() -> dict[str, str]:
         if not path.is_file():
             continue
         state = json.loads(path.read_text(encoding="utf-8"))
-        for origin in state.get("origins") or []:
-            for item in origin.get("localStorage") or []:
-                if item.get("name") == "email":
-                    identifiers[role] = str(item.get("value", ""))
+        token = _bearer_token(state)
+        email = _email_claim(token) if token else None
+        if email:
+            identifiers[role] = email
     return identifiers
+
+
+def _bearer_token(state: dict[str, object]) -> str | None:
+    for cookie in state.get("cookies") or []:  # type: ignore[union-attr]
+        if isinstance(cookie, dict) and cookie.get("name") == "token":
+            return str(cookie.get("value") or "") or None
+    for origin in state.get("origins") or []:  # type: ignore[union-attr]
+        if not isinstance(origin, dict):
+            continue
+        for item in origin.get("localStorage") or []:
+            if isinstance(item, dict) and item.get("name") == "token":
+                return str(item.get("value") or "") or None
+    return None
+
+
+def _email_claim(token: str) -> str | None:
+    """Extract the email from a JWT payload without verifying the signature."""
+    parts = token.split(".")
+    if len(parts) < 2:
+        return None
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)
+    try:
+        decoded = json.loads(base64.urlsafe_b64decode(payload))
+    except (ValueError, json.JSONDecodeError):
+        return None
+    data = decoded.get("data") if isinstance(decoded, dict) else None
+    if isinstance(data, dict) and isinstance(data.get("email"), str):
+        return str(data["email"])
+    return None
