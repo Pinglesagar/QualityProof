@@ -31,6 +31,9 @@ from qualityproof.external import ingest_manifest, read_manifest
 from qualityproof.generation import generate_approved
 from qualityproof.healing import propose_locator_healing, review_proposal, write_proposals
 from qualityproof.jira import (
+    API_TOKEN_ENV,
+    EMAIL_ENV,
+    TOKEN_ENV,
     JiraCloudAdapter,
     JiraPort,
     LocalJSONJiraAdapter,
@@ -756,7 +759,13 @@ def doctor(project: ProjectOption = Path(".")) -> None:
 def jira_config() -> None:
     """Show non-secret Jira configuration and credential environment names."""
     typer.echo("Default adapter: mock")
-    typer.echo("Cloud bearer token environment: QUALITYPROOF_JIRA_BEARER_TOKEN")
+    typer.echo(f"Cloud API token environment: {API_TOKEN_ENV} together with {EMAIL_ENV}")
+    typer.echo(f"Cloud OAuth bearer environment: {TOKEN_ENV}")
+    typer.echo(
+        "An Atlassian API token authenticates over HTTP Basic as email:token; a "
+        "bearer token is an OAuth 3LO access token. Either is accepted, and the "
+        "API token is preferred when both are present."
+    )
     typer.echo("No Jira credentials are read from or written to qualityproof.toml.")
 
 

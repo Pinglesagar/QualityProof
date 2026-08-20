@@ -1,3 +1,4 @@
+import base64
 import json
 import subprocess
 from pathlib import Path
@@ -464,3 +465,57 @@ def test_cli_jira_dry_run_and_snapshot_diff(tmp_path: Path) -> None:
     assert jira_result.exit_code == 0, jira_result.output
     assert json.loads(jira_result.output)["dry_run"] is True
     assert first.exit_code == second.exit_code == diff.exit_code == 0
+
+
+def test_an_atlassian_api_token_authenticates_over_basic(monkeypatch: pytest.MonkeyPatch) -> None:
+    """API tokens are Basic, not Bearer, and the difference is silent otherwise.
+
+    Sending an Atlassian API token as a bearer credential returns 401 with no
+    explanation of why, so supporting only the bearer scheme pushed every user
+    towards registering an OAuth application for no security benefit.
+    """
+
+    monkeypatch.delenv("QUALITYPROOF_JIRA_BEARER_TOKEN", raising=False)
+    monkeypatch.setenv("QUALITYPROOF_JIRA_API_TOKEN", "token-value")
+    monkeypatch.setenv("QUALITYPROOF_JIRA_EMAIL", "person@example.test")
+
+    adapter = JiraCloudAdapter("https://demo.atlassian.net")
+
+    assert adapter.auth_scheme == "basic"
+    scheme, encoded = adapter._authorization.split(" ", 1)
+    assert scheme == "Basic"
+    assert base64.b64decode(encoded).decode() == "person@example.test:token-value"
+
+
+def test_an_api_token_without_an_email_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Half-configured Basic auth fails as 401 at request time otherwise."""
+    monkeypatch.delenv("QUALITYPROOF_JIRA_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("QUALITYPROOF_JIRA_EMAIL", raising=False)
+    monkeypatch.setenv("QUALITYPROOF_JIRA_API_TOKEN", "token-value")
+
+    with pytest.raises(ValueError, match="authenticates as email:token"):
+        JiraCloudAdapter("https://demo.atlassian.net")
+
+
+def test_a_bearer_token_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The OAuth route must keep working; this adds a scheme, it does not swap one."""
+    monkeypatch.delenv("QUALITYPROOF_JIRA_API_TOKEN", raising=False)
+    monkeypatch.delenv("QUALITYPROOF_JIRA_EMAIL", raising=False)
+    monkeypatch.setenv("QUALITYPROOF_JIRA_BEARER_TOKEN", "oauth-access-token")
+
+    adapter = JiraCloudAdapter("https://demo.atlassian.net")
+
+    assert adapter.auth_scheme == "bearer"
+    assert adapter._authorization == "Bearer oauth-access-token"
+
+
+def test_no_credential_at_all_names_both_routes(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in (
+        "QUALITYPROOF_JIRA_API_TOKEN",
+        "QUALITYPROOF_JIRA_EMAIL",
+        "QUALITYPROOF_JIRA_BEARER_TOKEN",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    with pytest.raises(ValueError, match="for an API token"):
+        JiraCloudAdapter("https://demo.atlassian.net")

@@ -18,6 +18,15 @@ from qualityproof.models import JiraFinding, JiraIssueMapping, JiraIssueResult
 from qualityproof.repository import SQLiteRepository
 
 TOKEN_ENV = "QUALITYPROOF_JIRA_BEARER_TOKEN"
+#: Atlassian API tokens authenticate with HTTP Basic over `email:token`, not with
+#: a bearer header. Both schemes are supported because they are reached by very
+#: different routes: an API token is three clicks in account settings, while a
+#: bearer token requires registering an OAuth application and completing a 3LO
+#: exchange. Refusing the simpler one would push every user towards the heavier
+#: setup for no security benefit -- an API token is scoped to the account either
+#: way.
+API_TOKEN_ENV = "QUALITYPROOF_JIRA_API_TOKEN"
+EMAIL_ENV = "QUALITYPROOF_JIRA_EMAIL"
 _SENSITIVE_KEYS = re.compile(r"(token|secret|password|authorization|cookie)", re.I)
 _EMAIL = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
 _BEARER = re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]+", re.I)
@@ -124,7 +133,11 @@ class LocalJSONJiraAdapter:
 
 
 class JiraCloudAdapter:
-    """Jira Cloud REST v3 adapter; bearer token exists only in process memory."""
+    """Jira Cloud REST v3 adapter; the credential exists only in process memory.
+
+    Supports both an Atlassian API token over HTTP Basic and an OAuth bearer
+    token. Neither is read from or written to project configuration.
+    """
 
     adapter_name = "cloud"
 
@@ -133,15 +146,44 @@ class JiraCloudAdapter:
         base_url: str,
         *,
         token_env: str = TOKEN_ENV,
+        api_token_env: str = API_TOKEN_ENV,
+        email_env: str = EMAIL_ENV,
         timeout_seconds: float = 15.0,
     ) -> None:
-        token = os.environ.get(token_env)
-        if not token:
-            raise ValueError(f"{token_env} must be set for the cloud adapter")
         self.base_url = self._validated_base_url(base_url)
         self.account_id = self.base_url
-        self._token = token
+        self._authorization, self.auth_scheme = self._resolve_authorization(
+            token_env, api_token_env, email_env
+        )
         self.timeout_seconds = timeout_seconds
+
+    @staticmethod
+    def _resolve_authorization(
+        token_env: str, api_token_env: str, email_env: str
+    ) -> tuple[str, str]:
+        """Build the Authorization header, preferring an API token when present.
+
+        The header is assembled once and held only in process memory. It is never
+        logged, never written to configuration, and never included in a payload:
+        `redact` strips bearer and basic material from anything that is persisted.
+        """
+        api_token = os.environ.get(api_token_env)
+        email = os.environ.get(email_env)
+        if api_token and email:
+            encoded = base64.b64encode(f"{email}:{api_token}".encode()).decode()
+            return f"Basic {encoded}", "basic"
+        if api_token and not email:
+            raise ValueError(
+                f"{api_token_env} is set but {email_env} is not; an Atlassian API "
+                "token authenticates as email:token"
+            )
+        bearer = os.environ.get(token_env)
+        if bearer:
+            return f"Bearer {bearer}", "bearer"
+        raise ValueError(
+            f"set {api_token_env} with {email_env} for an API token, "
+            f"or {token_env} for an OAuth bearer token"
+        )
 
     @staticmethod
     def _validated_base_url(base_url: str) -> str:
@@ -155,7 +197,7 @@ class JiraCloudAdapter:
             or parts.fragment
             or (parts.port not in {None, 443})
         ):
-            raise ValueError("Jira bearer tokens require a credential-free HTTPS base URL")
+            raise ValueError("Jira credentials require a credential-free HTTPS base URL")
         path = parts.path.rstrip("/")
         tenant_host = host.endswith(".atlassian.net") and host.count(".") >= 2
         cloud_api = host == "api.atlassian.com" and bool(
@@ -172,7 +214,7 @@ class JiraCloudAdapter:
         response = httpx.request(
             method,
             f"{self.base_url}/rest/api/3/{path.lstrip('/')}",
-            headers={"Authorization": f"Bearer {self._token}", "Accept": "application/json"},
+            headers={"Authorization": self._authorization, "Accept": "application/json"},
             json=payload,
             timeout=self.timeout_seconds,
             follow_redirects=False,
