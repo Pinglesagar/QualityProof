@@ -23,7 +23,7 @@ $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli genera
 Generated and validated 8 tests.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli test --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
-Run run-3b61afbe7ad844edb5afdcd4f9191f11 passed; result: .qualityproof/runs/run-3b61afbe7ad844edb5afdcd4f9191f11/result.json; evidence: 0.
+Run run-16481f33061c41429fccc6fd288d3cc1 passed; result: .qualityproof/runs/run-16481f33061c41429fccc6fd288d3cc1/result.json; evidence: 0.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli requirements import /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/demo/seeded-defects.json --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --scope demo-seed-manifest
 Registered 9 requirements in scope 'demo-seed-manifest': SEED-A11Y-001, SEED-AUTHZ-001, SEED-JOURNEY-001, SEED-LAYOUT-001, SEED-LINK-001 ...
@@ -36,6 +36,7 @@ Audited 8 tests: 0 verified, 8 partial, 0 unknown.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli coverage --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --fail-on-orphans
 Requirements: 12; verified 9; partial 3; uncovered 0; orphan links 0; untraced tests 1.
+  unbanded: 9/12 verified
 Reports: coverage.json, coverage.md
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli report --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
@@ -49,7 +50,7 @@ $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli discov
 Discovered 18 pages and 16 actions; 2 blocked/unknown (shopper:frontier_exhausted; admin:frontier_exhausted).
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli test --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow
-Run run-978667e71ba744efaf5876491ec91b68 failed; result: .qualityproof/runs/run-978667e71ba744efaf5876491ec91b68/result.json; evidence: 0.
+Run run-d9ae23714f2f411d8c186b14edb18f07 failed; result: .qualityproof/runs/run-d9ae23714f2f411d8c186b14edb18f07/result.json; evidence: 0.
 
 $ /Users/propertyloop03/qualityproof/.venv/bin/python -m qualityproof.cli snapshot create demo-v2 --project /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow --application /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/application.json
 Wrote immutable snapshot /Users/propertyloop03/qualityproof/.qualityproof/demo-workflow/.qualityproof/snapshots/demo-v2.json

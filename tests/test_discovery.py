@@ -33,7 +33,7 @@ def test_normalize_url_is_deterministic() -> None:
 
 def test_normalize_route_replaces_identifiers() -> None:
     assert normalize_route("https://example.com/users/123?tab=profile") == (
-        "/users/:int?tab=%3Aparam"
+        "/users/:int?tab=:param"
     )
     assert normalize_route(
         "https://example.com/items/550e8400-e29b-41d4-a716-446655440000"

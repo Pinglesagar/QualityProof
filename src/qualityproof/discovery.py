@@ -292,6 +292,9 @@ class DiscoveryOptions:
     destructive_terms: tuple[str, ...] = DEFAULT_DESTRUCTIVE_TERMS
     denied_routes: tuple[str, ...] = DEFAULT_DENIED_ROUTES
     viewports: tuple[tuple[int, int], ...] = DEFAULT_VIEWPORTS
+    #: How long to wait for a client-side route to render content. Single-page
+    #: applications complete their document load before the view exists.
+    render_timeout_ms: float = 5_000.0
     role_name: str = "default"
     storage_state: Path | None = None
     #: Where to persist the authenticated session so the generated suite can
@@ -315,6 +318,8 @@ class DiscoveryOptions:
             raise ValueError("runtime limit must be positive")
         if not self.viewports:
             raise ValueError("at least one viewport is required")
+        if self.render_timeout_ms <= 0:
+            raise ValueError("render timeout must be positive")
         if any(width < 200 or height < 200 for width, height in self.viewports):
             raise ValueError("viewports must be at least 200x200")
         if (self.login_submit_method is None) != (self.login_submit_path is None):
@@ -327,8 +332,44 @@ class DiscoveryOptions:
                 raise ValueError("login submit path must be an absolute path")
 
 
+def is_fragment_route(fragment: str) -> bool:
+    """Distinguish a client-side route from an in-page anchor.
+
+    Single-page applications address views through the fragment: ``#/basket`` is a
+    different screen, while ``#pricing`` scrolls the current one. The convention is
+    reliable enough to rely on — a route fragment begins with a slash, optionally
+    after the historical hash-bang — and getting this wrong in either direction is
+    costly. Treating anchors as routes makes the crawler revisit one page under
+    dozens of identities; treating routes as anchors collapses an entire
+    application to a single page, which is what happened before this existed.
+    """
+    if not fragment:
+        return False
+    candidate = fragment[1:] if fragment.startswith("!") else fragment
+    return candidate.startswith("/")
+
+
+def _normalize_fragment(fragment: str) -> str:
+    """Canonicalize a client-side route fragment, or drop an in-page anchor."""
+    if not is_fragment_route(fragment):
+        return ""
+    candidate = fragment[1:] if fragment.startswith("!") else fragment
+    path, separator, query = candidate.partition("?")
+    path = re.sub(r"/{2,}", "/", path)
+    if path != "/":
+        path = path.rstrip("/")
+    if not separator:
+        return path
+    normalized = urlencode(sorted(parse_qsl(query, keep_blank_values=True)))
+    return f"{path}?{normalized}" if normalized else path
+
+
 def normalize_url(url: str, base_url: str | None = None) -> str:
-    """Resolve and canonicalize an HTTP(S) URL for deterministic deduplication."""
+    """Resolve and canonicalize an HTTP(S) URL for deterministic deduplication.
+
+    Client-side route fragments are preserved because they identify distinct
+    application states; in-page anchors are discarded because they do not.
+    """
     resolved = urljoin(base_url, url) if base_url else url
     parts = urlsplit(resolved)
     if parts.scheme.lower() not in {"http", "https"} or not parts.hostname:
@@ -342,14 +383,14 @@ def normalize_url(url: str, base_url: str | None = None) -> str:
     if path != "/":
         path = path.rstrip("/")
     query = urlencode(sorted(parse_qsl(parts.query, keep_blank_values=True)))
-    return urlunsplit((parts.scheme.lower(), netloc, path, query, ""))
+    fragment = _normalize_fragment(parts.fragment)
+    return urlunsplit((parts.scheme.lower(), netloc, path, query, fragment))
 
 
-def normalize_route(url: str) -> str:
-    """Replace common path and query identifiers with stable parameter tokens."""
-    parts = urlsplit(normalize_url(url))
+def _tokenize(path: str) -> str:
+    """Replace identifier-shaped path segments with stable parameter tokens."""
     segments: list[str] = []
-    for segment in parts.path.split("/"):
+    for segment in path.split("/"):
         if segment.isdigit():
             segments.append(":int")
         elif _UUID.fullmatch(segment):
@@ -358,10 +399,33 @@ def normalize_route(url: str) -> str:
             segments.append(":hash")
         else:
             segments.append(segment)
+    return "/".join(segments)
+
+
+def normalize_route(url: str) -> str:
+    """Replace common path and query identifiers with stable parameter tokens.
+
+    A client-side route becomes part of the route identity, so ``/#/basket`` and
+    ``/#/search`` are two routes rather than two names for the document root.
+    """
+    parts = urlsplit(normalize_url(url))
     query = urlencode(
-        [(key, ":param") for key, _ in parse_qsl(parts.query, keep_blank_values=True)]
+        [(key, ":param") for key, _ in parse_qsl(parts.query, keep_blank_values=True)],
+        safe=":",
     )
-    return urlunsplit(("", "", "/".join(segments) or "/", query, ""))
+    route = urlunsplit(("", "", _tokenize(parts.path) or "/", query, ""))
+    if not parts.fragment:
+        return route
+    fragment_path, separator, fragment_query = parts.fragment.partition("?")
+    tokenized = _tokenize(fragment_path)
+    if separator:
+        rendered = urlencode(
+            [(key, ":param") for key, _ in parse_qsl(fragment_query, keep_blank_values=True)],
+            safe=":",
+        )
+        if rendered:
+            tokenized = f"{tokenized}?{rendered}"
+    return f"{route}#{tokenized}"
 
 
 def is_allowed_url(url: str, origin: str, allowed_domains: tuple[str, ...] = ()) -> bool:
@@ -383,10 +447,18 @@ def is_destructive(label: str, terms: tuple[str, ...] = DEFAULT_DESTRUCTIVE_TERM
 
 
 def is_denied_route(url: str, denied_routes: tuple[str, ...]) -> bool:
-    """Match exact paths and path-prefix policies before issuing a request."""
-    path = urlsplit(normalize_url(url)).path
+    """Match exact paths and path-prefix policies before issuing a request.
+
+    Both the server path and the client-side route are checked: a policy denying
+    ``/logout`` must also deny ``#/logout``, or a single-page application would
+    quietly bypass every route rule.
+    """
+    parts = urlsplit(normalize_url(url))
+    fragment_path = parts.fragment.partition("?")[0]
+    candidates = [parts.path, fragment_path] if fragment_path else [parts.path]
     return any(
-        path == denied.rstrip("/") or path.startswith(f"{denied.rstrip('/')}/")
+        candidate == denied.rstrip("/") or candidate.startswith(f"{denied.rstrip('/')}/")
+        for candidate in candidates
         for denied in denied_routes
         if denied.startswith("/")
     )
@@ -643,6 +715,15 @@ async def discover_application(
                 url, depth, source_id = frontier.pop()
                 try:
                     page.set_default_timeout(_remaining_seconds(started, policy) * 1000)
+                    if urlsplit(url).fragment:
+                        # Force a document load for client-side routes. Moving
+                        # between two fragments of one document is a same-document
+                        # navigation: Playwright returns no Response, so the HTTP
+                        # status would be unknowable, and the previous route's
+                        # client state would leak into this one. Both matter here —
+                        # status is how a privilege boundary is observed, and
+                        # leaked state makes a fingerprint depend on visit order.
+                        await page.goto("about:blank")
                     response = await page.goto(
                         url,
                         wait_until="domcontentloaded",

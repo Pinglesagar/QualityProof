@@ -36,7 +36,7 @@
       "REQUIREMENT": 21,
       "UNATTRIBUTED": 6
     },
-    "benchmark_runtime_seconds": 0.065736,
+    "benchmark_runtime_seconds": 0.03865,
     "discovery_unknown_count": 2,
     "journeys_discovered": 8,
     "ledger_unknown_count": 1,
@@ -97,7 +97,7 @@
     "qualityproof_route_retargets": [
       "route_retargeted:/help->/missing-help"
     ],
-    "workflow_runtime_seconds": 74.539798
+    "workflow_runtime_seconds": 62.355809
   },
   "schema_version": "qualityproof-demo-benchmark/v2",
   "scope_notice": "Scores cover only this controlled fixture. No third-party tool was run and no third-party or general-accuracy comparison is claimed."
