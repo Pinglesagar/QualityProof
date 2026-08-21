@@ -34,7 +34,29 @@ juiceshop/
 
 ## Reproduce it
 
-Start Juice Shop on `http://localhost:3000`, then:
+Two of the 21 tests act as an authenticated customer and administrator, so the
+suite has a documented entry criterion (test plan **E-2**): role credentials must be
+present in the environment. Juice Shop ships documented demo accounts; export them
+and save the sessions once:
+
+```bash
+export JS_CUSTOMER_USER=... JS_CUSTOMER_PASS=...
+export JS_ADMIN_USER=... JS_ADMIN_PASS=...
+python -m scripts.juiceshop_auth
+```
+
+Credentials are read from the environment only and never written into this
+repository. The saved sessions live outside the repo tree, under
+`~/.qualityproof-auth/juiceshop/`.
+
+A saved session goes stale when the application is restarted: Juice Shop still
+answers `200` for the old token but resolves it to an empty user, so the browser
+behaves as an anonymous visitor. The suite refuses to run in that state and tells
+you to refresh, rather than failing with `['Your Basket (anonymous)']` as though the
+application were broken. Blaming the system under test for a harness precondition
+is the worst failure mode a suite has.
+
+Then, with Juice Shop on `http://localhost:3000`:
 
 ```bash
 qualityproof requirements import juiceshop/docs/project/requirements.yaml --project juiceshop

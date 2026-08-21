@@ -146,6 +146,11 @@ discover → plan → review → generate → test → audit → report → snap
   API (TS). Never imports it.
 - **snapshot / diff** — compares releases across seven independent facets so a
   change can be attributed to a cause.
+- **shard** — `--shard i/n` partitions by file, deterministically and
+  exactly-once. Each shard replaces only the verdicts for the files it selected,
+  because a shard owns a slice: replacing all of them meant shard 2 erased shard 1
+  and half the requirements then read `NOT_RUN` after a correct fan-out. An empty
+  shard is recorded and reported, not treated as a failure.
 - **jira / boards** — a finding synchronizes to Jira or Azure Boards, dry-run by
   default, with the payload a write would send shown for review first. One
   fingerprint, derived from the finding, is tagged on the record so a repeated

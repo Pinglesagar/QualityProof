@@ -496,10 +496,17 @@ def test_command(
     except (ValueError, RuntimeError) as error:
         typer.echo(f"Execution failed: {error}", err=True)
         raise typer.Exit(code=1) from error
-    typer.echo(
-        f"Run {result.run_id} {result.status}; result: {result.result_path}; "
-        f"evidence: {len(result.evidence_paths)}."
-    )
+    if not result.test_paths:
+        # Said out loud, because "passed" with nothing run must not read as proof.
+        typer.echo(
+            f"Run {result.run_id}: this shard selected no tests, so nothing ran. "
+            f"Recorded at {result.result_path}."
+        )
+    else:
+        typer.echo(
+            f"Run {result.run_id} {result.status}; result: {result.result_path}; "
+            f"evidence: {len(result.evidence_paths)}."
+        )
     if result.exit_code:
         raise typer.Exit(code=result.exit_code)
 

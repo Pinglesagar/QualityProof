@@ -223,23 +223,48 @@ def _collection_targets(paths: tuple[Path, ...]) -> tuple[str, ...]:
     800 generated files that measured 80 s serial against 1.75 s for the same
     files handed over as a directory. Individual files are still passed when only
     part of a directory is selected, which is what sharding does.
+
+    The membership test walks the directory **recursively**. It used to glob one
+    level while pytest collects a directory recursively, so a test in a
+    subdirectory was executed and had a verdict persisted for it despite never
+    being selected: the run record said one file and pytest reported two tests.
+    That also broke sharding in the other direction, because the file only rode
+    along in whichever shard happened to select some directory in full, so the
+    union of all shards was not the whole suite.
     """
     selected = {path.resolve() for path in paths}
-    targets: list[str] = []
+    collapsed: list[Path] = []
     consumed: set[Path] = set()
     for directory in sorted({path.parent.resolve() for path in paths}):
         on_disk = {
             candidate.resolve()
-            for candidate in directory.glob("test_*.py")
+            for candidate in directory.rglob("test_*.py")
             if candidate.is_file()
         }
         if on_disk and on_disk <= selected:
-            targets.append(str(directory))
+            collapsed.append(directory)
             consumed |= on_disk
-    targets.extend(
-        str(path) for path in sorted(selected - consumed)
-    )
+    # A collapsed directory already covers its subdirectories, so emitting both
+    # hands pytest the same file twice. pytest happens to deduplicate, but relying
+    # on that is an unstated assumption about another tool's behaviour.
+    roots = [
+        directory
+        for directory in collapsed
+        if not any(other != directory and other in directory.parents for other in collapsed)
+    ]
+    targets = [str(directory) for directory in roots]
+    targets.extend(str(path) for path in sorted(selected - consumed))
     return tuple(targets)
+
+
+def _verdict_namespace(project: Path, path: Path) -> str:
+    """Dotted module namespace a test file's verdict ids live under.
+
+    Mirrors the JUnit ``classname`` pytest writes, which is how verdict ids are
+    keyed, so a file's verdicts can be replaced without touching another file's.
+    """
+    relative = path.resolve().relative_to(project.resolve())
+    return ".".join((*relative.parts[:-1], relative.stem))
 
 
 def _worker_argument(configured: str) -> tuple[str, ...]:
@@ -261,8 +286,14 @@ def execute_tests(
     policy = ArtifactPolicy.from_environment()
     config = load_config(project)
     validate_extra_arguments(extra_args)
-    generated = tuple(sorted((project / ".qualityproof" / "generated").glob("test_*.py")))
-    custom_python = tuple(sorted((project / "scenarios" / "custom").glob("test_*.py")))
+    # Recursive, to match every other part of the tool that reads these trees:
+    # custom_tree_digest fingerprints them with rglob and `audit` audits them with
+    # rglob, so a test under scenarios/custom/<subdir>/ was appearing in the
+    # ledger while the execution side globbed one level and never selected it.
+    # With the collapse now recursive too, that test would have been audited,
+    # reported as traced, and then never run.
+    generated = tuple(sorted((project / ".qualityproof" / "generated").rglob("test_*.py")))
+    custom_python = tuple(sorted((project / "scenarios" / "custom").rglob("test_*.py")))
     paths = (*generated, *_custom_yaml_tests(project), *custom_python)
     if not paths:
         raise ValueError("no generated or custom tests found")
@@ -277,13 +308,60 @@ def execute_tests(
             for position, path in enumerate(sorted(paths))
             if position % total == index - 1
         )
-        if not paths:
-            raise ValueError(f"shard {index}/{total} selected no tests")
     started = datetime.now(UTC)
     run_id = f"run-{uuid4().hex}"
     run_directory = project / ".qualityproof" / "runs" / run_id
     evidence_directory = run_directory / "evidence"
     evidence_directory.mkdir(parents=True, exist_ok=True)
+    if not paths:
+        # Only a shard can reach this: an empty overall selection already raised.
+        # An empty shard is not a failure. A CI matrix pinned at a fixed TOTAL
+        # legitimately over-provisions, and raising here red-failed the job for
+        # having fewer test files than shards, which punishes a shrinking suite.
+        # The record is still written so the slice is accounted for rather than
+        # silently absent, and the caller reports it.
+        assert shard is not None
+        finished = datetime.now(UTC)
+        result_path = run_directory / "result.json"
+        result_path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "run_id": run_id,
+                    "status": "passed",
+                    "exit_code": 0,
+                    "tests": [],
+                    "started_at": started.isoformat(),
+                    "finished_at": finished.isoformat(),
+                    "stdout": f"shard {shard[0]}/{shard[1]} selected no tests",
+                    "stderr": "",
+                    "evidence": [],
+                    "junit_path": None,
+                    "artifact_policy": policy.describe(),
+                    "retried_tests": [],
+                    "workers": config.workers,
+                    "reruns": config.retries,
+                    "shard": list(shard),
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        assert_custom_unchanged(project, custom_before)
+        empty = TestRunResult(
+            run_id=run_id,
+            status="passed",
+            exit_code=0,
+            test_paths=(),
+            result_path=str(result_path.relative_to(project)),
+            started_at=started,
+            finished_at=finished,
+        )
+        if repository is not None:
+            repository.put("test_run", run_id, empty)
+        return empty
     junit_path = run_directory / "junit.xml"
     rerun_log = run_directory / "reruns.jsonl"
     command = [
@@ -392,17 +470,22 @@ def execute_tests(
     )
     if repository is not None:
         repository.put("test_run", run_id, result)
-        repository.replace_sets(
-            {
-                "verdict": _execution_verdicts(
-                    junit_path,
-                    test_names,
-                    completed.returncode,
-                    run_id,
-                    evidence,
-                    rerun_log=rerun_log,
-                )
-            }
+        # Scoped to the files this run selected, not the whole verdict kind. A
+        # shard owns a slice of the suite, and replacing everything meant shard 2
+        # erased shard 1: after a two-way fan-out only half the verdicts survived
+        # and the other half of the requirements reported NOT_RUN, which turned a
+        # correct fan-out into a false coverage result.
+        repository.replace_records_under(
+            "verdict",
+            tuple(_verdict_namespace(project, path) for path in paths),
+            _execution_verdicts(
+                junit_path,
+                test_names,
+                completed.returncode,
+                run_id,
+                evidence,
+                rerun_log=rerun_log,
+            ),
         )
     if junit_path.is_file():
         # Retained, not deleted: this file is the run's primary machine-readable

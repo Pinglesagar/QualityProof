@@ -170,6 +170,58 @@ class SQLiteRepository:
                     ),
                 )
 
+    def replace_records_under(
+        self,
+        kind: str,
+        prefixes: Iterable[str],
+        records: Iterable[tuple[str, BaseModel]],
+    ) -> None:
+        """Atomically replace only the records inside the given id namespaces.
+
+        ``replace_sets`` deletes an entire record kind, which is right for a
+        materialization that owns everything of that kind and wrong for one that
+        owns a slice. Sharded execution is the wrong case: each shard replaced
+        every stored verdict, so running shard 1 then shard 2 left only shard 2's
+        verdicts and half the suite read as never executed.
+
+        A record id is treated as being inside a namespace when it equals the
+        prefix or continues it with ``::`` or ``.``. Plain string prefixing would
+        be wrong: ``scenarios.custom.test_a`` is not a namespace parent of
+        ``scenarios.custom.test_abc``.
+        """
+        if not kind:
+            raise ValueError("record kind must not be empty")
+        namespaces = tuple(prefix for prefix in prefixes if prefix)
+        prepared = tuple(records)
+        with self._connect() as connection:
+            existing = [
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT record_id FROM records WHERE kind = ?", (kind,)
+                ).fetchall()
+            ]
+            stale = [
+                record_id
+                for record_id in existing
+                if any(
+                    record_id == namespace
+                    or record_id.startswith(f"{namespace}::")
+                    or record_id.startswith(f"{namespace}.")
+                    for namespace in namespaces
+                )
+            ]
+            connection.executemany(
+                "DELETE FROM records WHERE kind = ? AND record_id = ?",
+                ((kind, record_id) for record_id in stale),
+            )
+            connection.executemany(
+                "INSERT OR REPLACE INTO records (kind, record_id, payload) VALUES (?, ?, ?)",
+                (
+                    (kind, record_id, record.model_dump_json())
+                    for record_id, record in prepared
+                ),
+            )
+
     def replace_manifested_set(
         self,
         scope: str,

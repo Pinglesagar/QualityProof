@@ -14,11 +14,13 @@ another. One login, many contexts, no shared state.
 from __future__ import annotations
 
 import base64
+import functools
 import json
 import os
 from collections.abc import Iterator
 from pathlib import Path
 
+import httpx
 import pytest
 from playwright.sync_api import Browser, BrowserContext, Page
 
@@ -28,11 +30,74 @@ AUTH_DIRECTORY = Path(
 BASE_URL = os.environ.get("JUICESHOP_BASE_URL", "http://127.0.0.1:3000")
 
 
+def _saved_token(path: Path) -> str | None:
+    """Pull the session token out of a saved Playwright storage state."""
+    try:
+        state = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    for origin in state.get("origins", []):
+        for item in origin.get("localStorage", []):
+            if item.get("name") == "token" and item.get("value"):
+                return str(item["value"])
+    for cookie in state.get("cookies", []):
+        if cookie.get("name") == "token" and cookie.get("value"):
+            return str(cookie["value"])
+    return None
+
+
+@functools.cache
+def _session_is_live(role: str, token: str) -> bool:
+    """Ask the application whether it still regards this session as authenticated.
+
+    A saved storage state existing proves a login happened once. It does not prove
+    the session is still valid, and the application accepts a stale token with a
+    200 while resolving it to an empty user -- so the browser simply behaves as an
+    anonymous visitor.
+    """
+    try:
+        response = httpx.get(
+            f"{BASE_URL.rstrip('/')}/rest/user/whoami",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10.0,
+        )
+    except httpx.HTTPError:
+        return False
+    if response.status_code != 200:
+        return False
+    try:
+        user = response.json().get("user") or {}
+    except ValueError:
+        return False
+    return bool(user.get("email"))
+
+
 def _storage_state(role: str) -> Path:
+    """Return a saved session, refusing to proceed on one that is no longer valid.
+
+    Existence used to be the only check. When the application had been restarted
+    since the session was saved, the token no longer resolved to a user, every
+    authenticated test silently ran as an anonymous visitor, and the suite failed
+    with ``AssertionError: ['Your Basket (anonymous)']`` -- which reads as a defect
+    in the application. Blaming the system under test for a harness precondition
+    is the worst failure mode a test suite has, so this fails loudly instead and
+    names the fix. Test plan entry criterion E-2.
+    """
     path = AUTH_DIRECTORY / f"{role}.json"
     if not path.is_file():
         pytest.skip(
             f"no saved session for '{role}'. Run: python -m scripts.juiceshop_auth"
+        )
+    token = _saved_token(path)
+    if token is None or not _session_is_live(role, token):
+        pytest.fail(
+            f"the saved session for '{role}' is no longer valid, so this test would "
+            f"have run as an anonymous visitor and failed as though the application "
+            f"were broken. Export the role credentials and refresh it:\n"
+            f"  export JS_{role.upper()}_USER=... JS_{role.upper()}_PASS=...\n"
+            f"  python -m scripts.juiceshop_auth\n"
+            f"(test plan entry criterion E-2: credentials present in the environment)",
+            pytrace=False,
         )
     return path
 

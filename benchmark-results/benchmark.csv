@@ -1,6 +1,6 @@
 metric,value
 assertions_by_provenance,"{""OBSERVATION"": 32, ""REQUIREMENT"": 21, ""UNATTRIBUTED"": 6}"
-benchmark_runtime_seconds,0.052798
+benchmark_runtime_seconds,0.037697
 discovery_unknown_count,4
 journeys_discovered,8
 ledger_unknown_count,1

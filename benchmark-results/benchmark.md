@@ -13,7 +13,7 @@
 - Assertions by provenance: {"OBSERVATION": 32, "REQUIREMENT": 21, "UNATTRIBUTED": 6}
 - Ledger unknown count: 1
 - Discovery unknown count: 4
-- Benchmark runtime: 0.052798 seconds
+- Benchmark runtime: 0.037697 seconds
 
 Direct fixture checks are setup integrity checks, not QualityProof findings. No third-party tool was run and no comparative claim is made.
 
