@@ -636,12 +636,34 @@ class JiraFinding(DomainModel):
     evidence: dict[str, object] = Field(default_factory=dict)
 
 
+class IssueTracker(StrEnum):
+    """Which issue tracker a mapping belongs to.
+
+    Separate from ``adapter`` because the two answer different questions: the
+    adapter is the transport, the tracker is the system of record. Without this,
+    a mock run against Jira and a mock run against Azure Boards would produce the
+    same mapping identity for the same finding and collide.
+    """
+
+    JIRA = "jira"
+    AZURE_BOARDS = "azure_boards"
+
+
 class JiraIssueMapping(DomainModel):
+    """Recorded identity of a synchronized finding.
+
+    Named for Jira because Jira came first; it now covers any tracker. The stored
+    rows are keyed by tracker, so widening this did not invalidate them.
+    """
+
     fingerprint: str = Field(min_length=64, max_length=64)
     issue_key: str = Field(min_length=1)
-    adapter: Literal["mock", "cloud"]
+    adapter: Literal["mock", "cloud", "azure"]
     account: str = Field(min_length=1)
     project_key: str = Field(min_length=1)
+    #: Defaulted so a mapping written before trackers existed still loads as Jira,
+    #: which is what it was.
+    tracker: IssueTracker = IssueTracker.JIRA
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -650,7 +672,10 @@ class JiraIssueResult(DomainModel):
     action: Literal["create", "update", "unchanged"]
     issue_key: str | None = None
     dry_run: bool = True
-    request: dict[str, object]
+    #: Jira takes a field object; Azure Boards takes a JSON Patch array. The
+    #: payload shape belongs to the tracker, so this holds either rather than
+    #: forcing one tracker's spelling onto the other.
+    request: dict[str, object] | list[dict[str, object]]
 
 
 class LocatorSemantics(DomainModel):

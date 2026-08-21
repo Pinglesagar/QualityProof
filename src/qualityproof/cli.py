@@ -17,6 +17,12 @@ import typer
 import yaml
 
 from qualityproof.audit import audit_path, build_ledger
+from qualityproof.azure_boards import (
+    PAT_ENV,
+    AzureBoardsAdapter,
+    AzureBoardsRenderer,
+    LocalJSONAzureBoardsAdapter,
+)
 from qualityproof.config import load_config, write_default_config
 from qualityproof.coverage import compute_coverage, write_coverage_reports
 from qualityproof.discovery import (
@@ -39,6 +45,7 @@ from qualityproof.jira import (
     LocalJSONJiraAdapter,
     authorization_url,
     create_pkce_pair,
+    finding_fingerprint,
     sync_finding,
 )
 from qualityproof.models import (
@@ -74,6 +81,7 @@ from qualityproof.snapshots import (
     read_snapshot,
     write_diff_report,
 )
+from qualityproof.trackers import IssueTransport, synchronize_finding
 
 app = typer.Typer(
     name="qualityproof",
@@ -81,9 +89,13 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 jira_app = typer.Typer(help="Synchronize findings with Jira; dry-run by default.")
+boards_app = typer.Typer(
+    help="Synchronize findings with Azure Boards; dry-run by default."
+)
 healing_app = typer.Typer(help="Create and review governed locator proposals.")
 snapshot_app = typer.Typer(help="Capture immutable named evidence snapshots.")
 app.add_typer(jira_app, name="jira")
+app.add_typer(boards_app, name="boards")
 app.add_typer(healing_app, name="heal")
 app.add_typer(snapshot_app, name="snapshot")
 ProjectOption = Annotated[
@@ -882,6 +894,90 @@ def jira_sync(
         raise typer.BadParameter("adapter must be mock or cloud")
     result = sync_finding(
         parsed, project_key, port, repository, dry_run=not apply, issue_type=issue_type
+    )
+    typer.echo(result.model_dump_json(indent=2))
+
+
+@boards_app.command("config")
+def boards_config() -> None:
+    """Show non-secret Azure Boards configuration and the credential variable."""
+    typer.echo("Default adapter: mock")
+    typer.echo(f"Personal access token environment: {PAT_ENV}")
+    typer.echo(
+        "The token needs Work Items (Read & write) scope and is sent over HTTP "
+        "Basic with an empty username, which is what Azure DevOps expects."
+    )
+    typer.echo(
+        "Never place a token in qualityproof.toml, a finding, shell history or "
+        "source control. A token that has been pasted anywhere shared should be "
+        "revoked and reissued rather than reused."
+    )
+
+
+@boards_app.command("sync")
+def boards_sync(
+    finding: Annotated[Path, typer.Argument(exists=True, dir_okay=False, resolve_path=True)],
+    ado_project: Annotated[
+        str,
+        typer.Option(
+            "--ado-project",
+            help="Azure DevOps project name. May contain spaces.",
+        ),
+    ],
+    project: ProjectOption = Path("."),
+    adapter: Annotated[str, typer.Option(help="mock or azure")] = "mock",
+    organization_url: Annotated[
+        str | None,
+        typer.Option(
+            "--organization-url",
+            help="Azure DevOps organization, e.g. https://dev.azure.com/<organization>.",
+        ),
+    ] = None,
+    work_item_type: Annotated[
+        str,
+        typer.Option(
+            "--work-item-type",
+            help=(
+                "Work item type to create. Types come from the project's process "
+                "template, so Bug exists under Agile and Scrum while Basic offers "
+                "Issue instead. Check Project settings -> Process."
+            ),
+        ),
+    ] = "Bug",
+    apply: Annotated[
+        bool, typer.Option("--apply", help="Perform the Azure Boards write.")
+    ] = False,
+) -> None:
+    """Create or update one Azure Boards work item from a finding.
+
+    Dry-run by default, and the printed payload is exactly what a write would
+    send. The finding fingerprint is tagged onto the work item, so a repeated sync
+    updates the same item rather than filing a duplicate.
+    """
+    config = load_config(project)
+    repository = SQLiteRepository(project / config.database_path)
+    repository.initialize()
+    parsed = JiraFinding.model_validate_json(finding.read_text(encoding="utf-8"))
+    transport: IssueTransport[list[dict[str, object]]]
+    if adapter == "mock":
+        transport = LocalJSONAzureBoardsAdapter(
+            project / ".qualityproof" / "boards" / "work-items.json"
+        )
+    elif adapter == "azure":
+        if not organization_url:
+            raise typer.BadParameter("--organization-url is required for the azure adapter")
+        transport = AzureBoardsAdapter(organization_url, ado_project, work_item_type)
+    else:
+        raise typer.BadParameter("adapter must be mock or azure")
+    result = synchronize_finding(
+        parsed,
+        ado_project,
+        AzureBoardsRenderer(),
+        transport,
+        repository,
+        fingerprint=finding_fingerprint(parsed),
+        dry_run=not apply,
+        item_type=work_item_type,
     )
     typer.echo(result.model_dump_json(indent=2))
 

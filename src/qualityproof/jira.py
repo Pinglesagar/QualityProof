@@ -14,8 +14,9 @@ from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import httpx
 
-from qualityproof.models import JiraFinding, JiraIssueMapping, JiraIssueResult
+from qualityproof.models import IssueTracker, JiraFinding, JiraIssueResult
 from qualityproof.repository import SQLiteRepository
+from qualityproof.trackers import synchronize_finding
 
 TOKEN_ENV = "QUALITYPROOF_JIRA_BEARER_TOKEN"
 #: Atlassian API tokens authenticate with HTTP Basic over `email:token`, not with
@@ -238,6 +239,31 @@ class JiraCloudAdapter:
         self._request("PUT", f"issue/{issue_key}", {"fields": fields})
 
 
+class JiraRenderer:
+    """Renders a finding as a Jira issue field object."""
+
+    tracker = IssueTracker.JIRA
+
+    def validate_project(self, project: str) -> str:
+        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", project):
+            raise ValueError("project_key must be a Jira project identifier")
+        return project
+
+    def render(
+        self, finding: JiraFinding, fingerprint: str, project: str, item_type: str
+    ) -> dict[str, object]:
+        return {
+            "project": {"key": project},
+            "summary": finding.title,
+            "description": adf_description(finding, fingerprint),
+            # Configurable because issue types are per-project. "Bug" is absent
+            # from plenty of Jira projects, and hardcoding it turns a working
+            # configuration into an opaque 400 at write time.
+            "issuetype": {"name": item_type},
+            "labels": ["qualityproof", f"qp-{fingerprint[:12]}"],
+        }
+
+
 def sync_finding(
     finding: JiraFinding,
     project_key: str,
@@ -247,64 +273,21 @@ def sync_finding(
     dry_run: bool = True,
     issue_type: str = "Bug",
 ) -> JiraIssueResult:
-    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", project_key):
-        raise ValueError("project_key must be a Jira project identifier")
-    # Configurable because issue types are per-project. "Bug" is absent from plenty
-    # of Jira projects, and hardcoding it turns a working configuration into an
-    # opaque 400 at write time.
-    if not issue_type.strip():
-        raise ValueError("issue_type must not be empty")
-    fingerprint = finding_fingerprint(finding)
-    fields: dict[str, object] = {
-        "project": {"key": project_key},
-        "summary": finding.title,
-        "description": adf_description(finding, fingerprint),
-        "issuetype": {"name": issue_type.strip()},
-        "labels": ["qualityproof", f"qp-{fingerprint[:12]}"],
-    }
-    mapping_id = hashlib.sha256(
-        "\0".join(
-            (adapter.adapter_name, adapter.account_id, project_key.upper(), fingerprint)
-        ).encode()
-    ).hexdigest()
-    mapping = repository.get("jira_mapping", mapping_id, JiraIssueMapping)
-    if mapping is not None and (
-        mapping.adapter != adapter.adapter_name
-        or mapping.account != adapter.account_id
-        or mapping.project_key != project_key.upper()
-        or mapping.fingerprint != fingerprint
-    ):
-        raise ValueError("stored Jira mapping identity does not match this synchronization")
-    action = "update" if mapping else "create"
-    if dry_run:
-        return JiraIssueResult(
-            fingerprint=fingerprint,
-            action=action,
-            issue_key=mapping.issue_key if mapping else None,
-            request=fields,
-        )
-    if mapping:
-        adapter.update_issue(mapping.issue_key, fields)
-        issue_key = mapping.issue_key
-    else:
-        issue_key = adapter.create_issue(fields)
-        repository.put(
-            "jira_mapping",
-            mapping_id,
-            JiraIssueMapping(
-                fingerprint=fingerprint,
-                issue_key=issue_key,
-                adapter=adapter.adapter_name,
-                account=adapter.account_id,
-                project_key=project_key.upper(),
-            ),
-        )
-    return JiraIssueResult(
-        fingerprint=fingerprint,
-        action=action,
-        issue_key=issue_key,
-        dry_run=False,
-        request=fields,
+    """Synchronize one finding to Jira.
+
+    A thin binding of the Jira renderer to the shared, tracker-agnostic
+    synchronization. The identity, idempotency and refusal rules live there so
+    that adding Azure Boards did not duplicate them.
+    """
+    return synchronize_finding(
+        finding,
+        project_key,
+        JiraRenderer(),
+        adapter,
+        repository,
+        fingerprint=finding_fingerprint(finding),
+        dry_run=dry_run,
+        item_type=issue_type,
     )
 
 

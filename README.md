@@ -146,6 +146,12 @@ discover → plan → review → generate → test → audit → report → snap
   API (TS). Never imports it.
 - **snapshot / diff** — compares releases across seven independent facets so a
   change can be attributed to a cause.
+- **jira / boards** — a finding synchronizes to Jira or Azure Boards, dry-run by
+  default, with the payload a write would send shown for review first. One
+  fingerprint, derived from the finding, is tagged on the record so a repeated
+  sync updates it rather than filing a duplicate. Identity and idempotency are
+  shared; only the payload dialect and transport differ, and the two are
+  type-bound so a Jira payload cannot reach the Azure transport.
 
 Full detail: [architecture and threat model](docs/ARCHITECTURE.md) ·
 [evidence model](docs/EVIDENCE_MODEL.md).
